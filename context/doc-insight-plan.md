@@ -86,7 +86,9 @@ The migration fixture uses the `postgres-test` Compose service on port 5433. Tha
 
 ### 0E. Learning Checkpoint
 
-- [ ] Learning: explain the code changes in small chunks with file names, short snippets, layman explanations, and how config, the database session, and error handling give later phases a base to build on. Packages for domain, adapters, API, pipeline, and worker are not created here.
+- [x] Learning: explain the code changes in small chunks with file names, short snippets, layman explanations, and how config, the database session, and error handling give later phases a base to build on. Packages for domain, adapters, API, pipeline, and worker are not created here.
+
+A config loader reads variables from `.env`. Postgres is accessed through the SQLAlchemy ORM, with Alembic migrations. Logging is structured JSON. Integration tests talk to a separate test database.
 
 Suggested commit message: `feat(backend): add config, postgres, and migrations`
 
