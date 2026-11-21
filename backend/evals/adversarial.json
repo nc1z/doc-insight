@@ -482,13 +482,12 @@
           "action": "upload",
           "files": ["oversized"],
           "expect": {
-            "http_status_one_of": [413, 422],
+            "http_status": 422,
             "job_created": false,
             "rejected": [{ "filename": "oversized.pdf", "code": "file_too_large" }]
           }
         }
-      ],
-      "note": "The status code is fixed by the 413-versus-422 decision in Phase 1."
+      ]
     },
     {
       "id": "A20",

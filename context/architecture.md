@@ -86,7 +86,7 @@ sequenceDiagram
 ```
 
 - **Validation happens twice.** The client check gives fast feedback. The server check is the one that is enforced, because client checks can be bypassed.
-- **Server validation** checks MIME type, `%PDF` magic bytes, size, page count, encryption, and JavaScript or embedded files.
+- **Server validation** checks MIME type, `%PDF` magic bytes, size, page count, encryption, and JavaScript or embedded files. A file that fails is a per-file rejection. Size, page, and file-count limits use that same result with `422`, including a whole upload that has too many files.
 - **Files rejected on the client** are shown with reasons before upload, so the analyst can replace or remove them first.
 - **`202 Accepted`** means the job is queued, not that it has finished. The UI follows progress through the [status flow](#status-flow).
 
@@ -219,7 +219,6 @@ stateDiagram-v2
 ### Open decisions
 
 - **Queue library**: Procrastinate or PGQueuer. Pick the one that can enqueue on the same connection and transaction that creates the job.
-- **Error codes for limits**: whether oversized uploads or too many files return `413`, or are folded into the `422` per-file error list.
 - **Failures during processing**: whether the same choice applies when a document fails later (for example extraction or LLM failure), by pausing before consolidation.
 - **Timeout for `awaiting_input`**: how long a job waits for a decision before it expires.
 

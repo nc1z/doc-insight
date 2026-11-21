@@ -29,6 +29,7 @@ These are my decision records and thought process throughout planning & developm
 
 - `2026-11-21 15:47` **All prompts in one central file** (`backend/app/pipeline/prompts.yaml`, `context/architecture.md`): system prompts, user templates, and Jev questions live in one file that maintainers edit, instead of prompt text spread across pipeline steps. Each entry is versioned and validated at startup, the version is recorded with every LLM call and used in the cache key, and changes to the file trigger the evals.
 - `2026-11-21 20:28` **MinIO for uploads** (`context/architecture.md`): for this POC, the API and worker store files in a local MinIO service through the S3 API, with no cloud account. In production the same adapter would point at AWS S3, and only the endpoint, bucket, and keys would change.
+- `2026-11-21 21:50` **Limit errors return `422`** (`context/architecture.md`): an oversized file or a PDF with too many pages is a per-file rejection, and too many files is a `422` for the whole upload. A mixed upload still accepts the valid files and records the others as rejected, which is the same result the analyst already sees. The error codes stay `file_too_large`, `page_limit_exceeded`, and `file_count_exceeded`.
 
 ## Re-design based on Industry Practices
 
