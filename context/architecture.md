@@ -1,6 +1,6 @@
 # Architecture
 
-Solution design for doc-insight. Product requirements live in [PRD.md](PRD.md), and the architectural rules in [direction.md](direction.md).
+Solution design for doc-insight. Product requirements live in [PRD.md](PRD.md), the architectural rules in [direction.md](direction.md), and the literature behind the pipeline design in [industry-insights.md](industry-insights.md).
 
 ## System components (POC)
 
@@ -349,21 +349,32 @@ Document text is untrusted data. Guardrails run in layers, cheapest first.
 
 - **Programmatic checks**: patterns such as "ignore previous instructions" or fake role markers, hidden text (white or tiny font), invisible Unicode characters, and long encoded blobs.
 - **Decision-model classifier**: a fast, cheap decision model returns the probability that each chunk contains instructions aimed at the model. It sits behind its own classifier interface (`classify(text) -> label, score`), not the LLM adapter, because decision models do not take prompts or generate text.
-- **Prompt hardening**: document text is wrapped in clear delimiters, and system instructions say never to follow instructions inside documents.
+- **Datamarking (spotlighting)**: document text in prompts has a special marker character interleaved through it, and the system prompt explains that marked text is data and must never be followed as instructions. Delimiters alone can be faked by an attacker; datamarking is far more resistant.
+- **No tools for the LLM**: the pipeline's model only returns JSON and cannot take actions, so a successful injection can distort output but cannot trigger anything.
 - **Output validation**: every LLM response is checked against its schema and retried on invalid output. Citations are checked programmatically: the cited page must contain the quoted text.
-- **Flagged documents** are marked on the job and shown in the UI with a warning, never dropped silently.
+- **Flagged documents** are marked on the job and shown in the UI with a warning, never dropped silently. Flags carry forward into consolidation and appear in the report, because injected content can still travel through a document's summary.
 
 ### Document summary
 
 - Each document is summarised separately, in parallel, as its own queue task.
 - Long documents are split into chunks. Each chunk is summarised, then the chunk summaries are combined into the document's key details (map-reduce), within a configurable token budget.
-- The output follows the per-document schema: title, inferred type, short summary, main topics, key entities, and notable points with page citations.
+- The combine step receives relevant source excerpts alongside the chunk summaries, which improves faithfulness and reduces hallucination.
+- The output follows the per-document schema: title, inferred type, short summary, main topics, key entities, and notable points, each with a page number and a supporting quote.
 
 ### Consolidated summary
 
 - Runs once every document in the job has finished (fan-in).
 - Its input is the validated document summaries, not the raw text. This keeps the prompt small and limits how far injected content can travel.
-- The output follows the report schema: overall summary, common themes, differences and contradictions, combined entities, takeaways, and excluded files.
+- The output follows the report schema: overall summary, common themes, contradictions, combined entities, takeaways, flagged documents, and excluded files.
+- **Contradictions are surfaced, not merged.** LLMs tend to collapse conflicting facts into one consensus value. The prompt asks for disagreements explicitly, and each contradiction lists both claims, each with its document and page.
+
+### Evaluation
+
+- **Programmatic checks first**: schema validity, quotes found on their cited pages, entity recall, and topic coverage against the golden set.
+- **LLM judge for coverage and conciseness**, averaged over several runs, because single LLM-judge scores are inconsistent and overestimate faithfulness.
+- **Human spot-check** of the sample outputs, for what automated scoring misses.
+- **Contradiction case**: the golden set includes a pair of documents that disagree on purpose; the report must surface both sides.
+- **Reasoning modes** are compared through evals before being enabled, since more reasoning does not reliably improve summaries.
 
 ### Model choice per step
 
@@ -389,6 +400,7 @@ Each step picks its model through configuration (strategy pattern). The pipeline
 ### Pipeline open decisions
 
 - **Flagged documents**: process them with hardened prompts and a warning, or pause the job for the analyst to decide, as with rejected files.
+- **PDF library**: PyMuPDF4LLM (fastest, AGPL licence, needs Tesseract for scanned pages) or Docling (MIT licence, slower, built-in layout, tables, and OCR).
 - **GLM version**: GLM 4.7 with JSON mode and validation, or a newer version with schema-constrained output.
 - **Injection threshold**: the Jev probability above which a chunk is flagged, tuned on the adversarial eval set.
 - **Chunk size and token budget** per model.
