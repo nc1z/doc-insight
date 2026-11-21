@@ -1,0 +1,70 @@
+import uuid
+from datetime import datetime
+from enum import StrEnum
+from uuid import uuid4
+
+from sqlalchemy import DateTime, Enum, ForeignKey, String, Text, false, func
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+from app.domain.status import DocumentStatus, JobStatus
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+def _status_type(enum: type[StrEnum], name: str) -> Enum:
+    return Enum(
+        enum,
+        name=name,
+        native_enum=True,
+        values_callable=lambda members: [member.value for member in members],
+    )
+
+
+class Job(Base):
+    __tablename__ = "jobs"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid4)
+    status: Mapped[JobStatus] = mapped_column(_status_type(JobStatus, "job_status"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    documents: Mapped[list[Document]] = relationship(
+        back_populates="job",
+        cascade="all, delete-orphan",
+    )
+
+
+class Document(Base):
+    __tablename__ = "documents"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid4)
+    job_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("jobs.id", ondelete="CASCADE"),
+        index=True,
+    )
+    status: Mapped[DocumentStatus] = mapped_column(
+        _status_type(DocumentStatus, "document_status"),
+        default=DocumentStatus.PENDING,
+    )
+    filename: Mapped[str] = mapped_column(String(1024))
+    storage_key: Mapped[str | None] = mapped_column(String(1024), unique=True)
+    sha256: Mapped[str | None] = mapped_column(String(64))
+    page_count: Mapped[int | None]
+    rejection_reason: Mapped[str | None] = mapped_column(Text)
+    excluded: Mapped[bool] = mapped_column(server_default=false(), default=False)
+    flagged: Mapped[bool] = mapped_column(server_default=false(), default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+    )
+
+    job: Mapped[Job] = relationship(back_populates="documents")

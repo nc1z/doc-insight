@@ -100,8 +100,10 @@ Solves flow step 1: a client (Bruno) uploads PDFs and gets an immediate job ID.
 
 ### 1A. Data Model
 
-- [ ] Add `app/domain/` with SQLAlchemy models for the `jobs` and `documents` tables: job status, document status, filename, storage key, SHA-256 hash, page count, rejection reason, and an `excluded` flag. Point Alembic `target_metadata` at those models and generate the migration with `alembic revision --autogenerate`.
-- [ ] Define job and document status enums in that package, matching the job and document states in the architecture.
+- [x] Add `app/domain/` with SQLAlchemy models for the `jobs` and `documents` tables: job status, document status, filename, storage key, SHA-256 hash, page count, rejection reason, and an `excluded` flag. Point Alembic `target_metadata` at those models and generate the migration with `alembic revision --autogenerate`.
+- [x] Define job and document status enums in that package, matching the job and document states in the architecture.
+
+`JobStatus` and `DocumentStatus` use the architecture's state names. A document also has `flagged`, because a flagged document can still succeed. Storage key, hash, page count, and rejection reason are optional so a rejected file can be recorded before it is stored. Migration `0002_jobs_documents` was generated from the models.
 
 ### 1B. File Validation
 
