@@ -8,6 +8,9 @@ importers:
 
   .:
     devDependencies:
+      husky:
+        specifier: 9.1.7
+        version: 9.1.7
       turbo:
         specifier: 2.11.11
         version: 2.11.11
@@ -44,6 +47,11 @@ packages:
     cpu: [arm64]
     os: [win32]
 
+  husky@9.1.7:
+    resolution: {integrity: sha512-5gs5ytaNjBrh5Ow3zrvdUUY+0VxIuWVL4i9irt6friV+BqdCfmV11CQTWMiBYWHbXhco+J1kHfTOUkePhCDvMA==}
+    engines: {node: '>=18'}
+    hasBin: true
+
   turbo@2.11.11:
     resolution: {integrity: sha512-AI4UJbUE/2cVZdoXJ4PODc8qvrjhQQX9Fa93eKGOI6Ims/w7+kUIb9T1jhlgSnZcf+gtUruci/ohSwqtNNC5Yw==}
     hasBin: true
@@ -67,6 +75,8 @@ snapshots:
 
   '@turbo/windows-arm64@2.11.11':
     optional: true
+
+  husky@9.1.7: {}
 
   turbo@2.11.11:
     optionalDependencies:
