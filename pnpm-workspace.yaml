@@ -1,0 +1,6 @@
+packages:
+  - frontend
+  - backend
+
+# Only install package versions published at least 7 days ago (minutes).
+minimumReleaseAge: 10080
