@@ -126,7 +126,9 @@ Solves flow step 1: a client (Bruno) uploads PDFs and gets an immediate job ID.
 
 ### 1F. Sample Fixtures
 
-- [ ] Add `samples/` with 2–4 PDFs on one topic and a `samples/README.md` listing source and licence.
+- [ ] Add a fixture builder that generates the eval PDFs from `backend/evals/fixtures.json` (text, scanned, chart, hidden-text, and invalid binary variants); generated PDFs are not committed.
+- [ ] Turn the `ci_mock` file-validation cases in `backend/evals/adversarial.json` (A14–A22) into integration tests.
+- [ ] Add `samples/` with 2–4 real PDFs on one topic for the demo and a `samples/README.md` listing source and licence.
 - [ ] Include at least two samples that disagree on a fact, so the report must surface a contradiction.
 - [ ] Add `samples/invalid/`: corrupt, encrypted, empty, and non-PDF renamed to `.pdf`.
 - [ ] Add `samples/adversarial/` with a PDF containing injected instructions.
@@ -341,8 +343,9 @@ Solves flow step 7: every prompt, model, or provider change can be compared agai
 
 ### 7A. Eval Sets
 
-- [ ] Add `backend/evals/golden/` with expected topics, entities, and themes for each sample, plus the expected contradiction between the disagreeing samples.
-- [ ] Add `backend/evals/adversarial/` with injection cases, false-positive traps, and expected safe behaviour.
+- [ ] Use `backend/evals/golden.json` and `backend/evals/adversarial.json` as the source of truth; extend them rather than replacing them, and bump `version` when an expectation changes.
+- [ ] Put the canary from `adversarial.json` in every system prompt in `prompts.yaml`.
+- [ ] Load the eval files with Pydantic models, so a malformed case fails before any run.
 
 ### 7B. Eval Runner
 
@@ -354,7 +357,8 @@ Solves flow step 7: every prompt, model, or provider change can be compared agai
 
 ### 7C. CI and Manual Runs
 
-- [ ] Run the evals in CI with the mock provider, checking the harness and the adversarial handling.
+- [ ] Run the `ci_mock` cases in CI with the mock provider, checking API behaviour, statuses, schema shape, and programmatic flags.
+- [ ] Run the `real` cases manually; a run passes only if every threshold in both files is met.
 - [ ] Run the evals manually against real models and commit the results file.
 
 ### 7D. Learning Checkpoint

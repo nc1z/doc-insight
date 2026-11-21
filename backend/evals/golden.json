@@ -1,0 +1,615 @@
+{
+  "description": "Golden eval set: representative inputs and what correct behaviour looks like. This is the source of truth for whether doc-insight works. Documents are defined in fixtures.json.",
+  "version": 1,
+  "document_types": [
+    "report",
+    "news_article",
+    "press_release",
+    "letter",
+    "assessment",
+    "forecast",
+    "survey",
+    "transcript",
+    "newsletter",
+    "article",
+    "other"
+  ],
+  "matching": {
+    "text": "Case-insensitive substring match against the relevant output fields. A list under match_any passes if any one value matches.",
+    "entities": "An entity is a string or an object with name and aliases. It counts as found if its name or any alias appears in the matching entity list of the output.",
+    "facts": "A fact is found if any notable point or summary field matches. Its citation is correct if the notable point cites the listed page and its quote appears on that page.",
+    "pages": "Page numbers start at 1."
+  },
+  "runs_in": {
+    "ci_mock": "Runs in CI with the mock LLM and mock classifier. Checks API behaviour, statuses, and schema shape, not content quality.",
+    "real": "Runs manually against real models. Checks content quality."
+  },
+  "thresholds": {
+    "schema_validity": 1.0,
+    "api_behaviour": 1.0,
+    "fact_recall": 0.9,
+    "entity_recall": 0.8,
+    "topic_coverage": 0.8,
+    "citation_accuracy": 0.95,
+    "contradictions_surfaced": 1.0,
+    "must_not_contain_violations": 0,
+    "unsupported_entity_rate_max": 0.05,
+    "judge": {
+      "runs": 3,
+      "scale": "1 to 5",
+      "min_average": 4.0
+    }
+  },
+  "judge_criteria": {
+    "coverage": "The summary covers the main points of the source without missing anything an analyst would need.",
+    "conciseness": "The summary is short and skimmable, with no padding or repetition.",
+    "faithfulness": "Every statement is supported by the source documents."
+  },
+  "cases": [
+    {
+      "id": "G01",
+      "name": "Single report",
+      "purpose": "One text PDF produces correct key details and a one-document report.",
+      "phase": 6,
+      "runs_in": ["ci_mock", "real"],
+      "steps": [
+        {
+          "action": "upload",
+          "files": ["council-report"],
+          "expect": { "http_status": 202, "job_status": "queued" }
+        },
+        {
+          "action": "wait_until_final",
+          "expect": { "job_status": "succeeded" }
+        }
+      ],
+      "expect": {
+        "documents": {
+          "council-report": {
+            "inferred_type": "report",
+            "flagged": false,
+            "topics_any": [
+              {
+                "topic": "light rail extension",
+                "match_any": ["light rail", "harbour line", "extension"]
+              },
+              { "topic": "funding", "match_any": ["fund", "grant", "bond", "budget"] },
+              { "topic": "risks", "match_any": ["risk", "soil", "heritage", "noise"] }
+            ],
+            "entities": {
+              "people": ["Tomás Reyes", "Ana Ruiz"],
+              "organisations": ["Port Arden City Council", "Northshore State Transport Fund"],
+              "locations": [
+                "Central Station",
+                "Kestrel Point",
+                "Marina Park",
+                "Wharf Street",
+                "Old Customs House"
+              ],
+              "dates": ["12 March 2026", "July 2026"]
+            },
+            "facts": [
+              {
+                "claim": "Total project cost is $420 million",
+                "match_any": ["420 million", "$420m", "420m"],
+                "page": 1
+              },
+              {
+                "claim": "The extension is 9.5 kilometres",
+                "match_any": ["9.5 k", "9.5km"],
+                "page": 1
+              },
+              {
+                "claim": "Six new stations",
+                "match_any": ["six", "6 new", "6 stations"],
+                "page": 1
+              },
+              {
+                "claim": "Services start in the fourth quarter of 2028",
+                "match_any": ["fourth quarter of 2028", "q4 2028", "late 2028", "end of 2028"],
+                "page": 1
+              },
+              {
+                "claim": "$250 million state grant",
+                "match_any": ["250 million", "$250m"],
+                "page": 2
+              },
+              {
+                "claim": "$170 million in municipal bonds",
+                "match_any": ["170 million", "$170m"],
+                "page": 2
+              },
+              { "claim": "Heritage-listed building from 1887", "match_any": ["1887"], "page": 3 },
+              {
+                "claim": "Approved 9 votes to 2",
+                "match_any": ["9 votes to 2", "9-2", "9 to 2"],
+                "page": 3
+              }
+            ],
+            "must_not_contain": ["380 million", "2029"]
+          }
+        },
+        "report": {
+          "contradictions": [],
+          "flagged_documents": [],
+          "excluded_files": []
+        },
+        "judge": ["coverage", "conciseness", "faithfulness"]
+      }
+    },
+    {
+      "id": "G02",
+      "name": "Three documents on one topic, with contradictions",
+      "purpose": "The consolidated report finds common themes, combines entities, and surfaces disagreements with both sides attributed.",
+      "phase": 6,
+      "runs_in": ["ci_mock", "real"],
+      "steps": [
+        {
+          "action": "upload",
+          "files": ["council-report", "news-article", "contractor-release"],
+          "expect": { "http_status": 202, "job_status": "queued" }
+        },
+        {
+          "action": "wait_until_final",
+          "expect": { "job_status": "succeeded" }
+        }
+      ],
+      "expect": {
+        "documents": {
+          "news-article": {
+            "inferred_type": "news_article",
+            "flagged": false,
+            "entities": {
+              "people": ["Priya Nandakumar", "Elena Marsh", "Daniel Okafor", "Ben Whitfield"],
+              "organisations": [
+                "Port Arden Herald",
+                "Harbourside Residents Association",
+                "Port Arden City Council"
+              ],
+              "locations": ["Kestrel Point", "Wharf Street"],
+              "dates": ["13 March 2026", "April 2026"]
+            },
+            "facts": [
+              {
+                "claim": "Petition with 3,400 signatures",
+                "match_any": ["3,400", "3400"],
+                "page": 2
+              },
+              {
+                "claim": "Residents concerned about night-time construction noise",
+                "match_any": ["night-time", "night time", "noise", "sleep"],
+                "page": 2
+              },
+              {
+                "claim": "Councillor Whitfield says the budget relies on borrowing",
+                "match_any": ["borrow"],
+                "page": 2
+              }
+            ]
+          },
+          "contractor-release": {
+            "inferred_type": "press_release",
+            "flagged": false,
+            "entities": {
+              "people": ["Ingrid Halvorsen", "Sam Patel"],
+              "organisations": [
+                { "name": "Halvorsen Civil Works", "aliases": ["Halvorsen"] },
+                "Port Arden City Council"
+              ],
+              "locations": ["Wharf Street"],
+              "dates": ["2 April 2026", "August 2026", "mid-2029"]
+            },
+            "facts": [
+              {
+                "claim": "Project valued at $380 million",
+                "match_any": ["380 million", "$380m", "380m"],
+                "page": 1
+              },
+              { "claim": "1,200 construction jobs", "match_any": ["1,200", "1200"], "page": 1 },
+              {
+                "claim": "Passenger service from mid-2029",
+                "match_any": ["mid-2029", "mid 2029", "2029"],
+                "page": 2
+              },
+              {
+                "claim": "Quieter vibratory piling",
+                "match_any": ["vibratory piling", "quieter piling"],
+                "page": 2
+              }
+            ]
+          }
+        },
+        "report": {
+          "common_themes": {
+            "min_matched": 3,
+            "themes": [
+              { "theme": "cost and funding", "match_any": ["cost", "fund", "budget", "borrow"] },
+              {
+                "theme": "timeline",
+                "match_any": ["timeline", "schedule", "2028", "2029", "open"]
+              },
+              {
+                "theme": "community impact and noise",
+                "match_any": ["noise", "resident", "community"]
+              },
+              { "theme": "jobs and economic benefit", "match_any": ["job", "employment", "econom"] }
+            ]
+          },
+          "contradictions": [
+            {
+              "about": "Project cost",
+              "sides": [
+                { "document": "council-report", "page": 1, "match_any": ["420"] },
+                { "document": "contractor-release", "page": 1, "match_any": ["380"] }
+              ]
+            },
+            {
+              "about": "When passenger service starts",
+              "sides": [
+                { "document": "council-report", "page": 1, "match_any": ["2028"] },
+                { "document": "contractor-release", "page": 2, "match_any": ["2029"] }
+              ]
+            }
+          ],
+          "optional_contradictions": [
+            {
+              "about": "Construction start month",
+              "sides": [
+                { "document": "council-report", "page": 1, "match_any": ["july"] },
+                { "document": "contractor-release", "page": 2, "match_any": ["august"] }
+              ]
+            }
+          ],
+          "combined_entities_include": [
+            "Port Arden City Council",
+            "Halvorsen Civil Works",
+            "Elena Marsh",
+            "Tomás Reyes",
+            "Kestrel Point",
+            "Wharf Street"
+          ],
+          "combined_entities_unique": true,
+          "flagged_documents": [],
+          "excluded_files": []
+        },
+        "judge": ["coverage", "conciseness", "faithfulness"]
+      }
+    },
+    {
+      "id": "G03",
+      "name": "Long document",
+      "purpose": "Facts buried deep in a 36-page document survive chunking and map-reduce, with correct page citations.",
+      "phase": 6,
+      "runs_in": ["ci_mock", "real"],
+      "eval_settings": { "chunk_token_budget": 1500 },
+      "steps": [
+        {
+          "action": "upload",
+          "files": ["environmental-assessment"],
+          "expect": { "http_status": 202, "job_status": "queued" }
+        },
+        {
+          "action": "wait_until_final",
+          "expect": { "job_status": "succeeded" }
+        }
+      ],
+      "expect": {
+        "documents": {
+          "environmental-assessment": {
+            "inferred_type": "assessment",
+            "flagged": false,
+            "page_count": 36,
+            "chunked": true,
+            "entities": {
+              "people": ["Hana Sato"],
+              "organisations": ["Tidewater Environmental Consulting", "Port Arden City Council"],
+              "locations": ["Marina Park", "Wharf Street", "Old Customs House"],
+              "dates": ["June 2026"]
+            },
+            "facts": [
+              {
+                "claim": "Arden marsh frog is endangered",
+                "match_any": ["arden marsh frog"],
+                "page": 9
+              },
+              {
+                "claim": "No construction near the wetland from September to November",
+                "match_any": ["september to november", "breeding season"],
+                "page": 9
+              },
+              {
+                "claim": "Night-time noise limit of 65 decibels",
+                "match_any": ["65 decibels", "65 db", "65db"],
+                "page": 21
+              },
+              {
+                "claim": "$12 million mitigation budget",
+                "match_any": ["12 million", "$12m"],
+                "page": 33
+              }
+            ],
+            "must_not_contain": ["survey methodology"]
+          }
+        },
+        "judge": ["coverage", "conciseness", "faithfulness"]
+      }
+    },
+    {
+      "id": "G04",
+      "name": "Scanned page",
+      "purpose": "A page with no text layer is still read, through OCR or a multimodal model.",
+      "phase": 8,
+      "runs_in": ["real"],
+      "steps": [
+        {
+          "action": "upload",
+          "files": ["heritage-letter"],
+          "expect": { "http_status": 202, "job_status": "queued" }
+        },
+        {
+          "action": "wait_until_final",
+          "expect": { "job_status": "succeeded" }
+        }
+      ],
+      "expect": {
+        "documents": {
+          "heritage-letter": {
+            "inferred_type": "letter",
+            "flagged": false,
+            "entities": {
+              "people": ["Margaret Chen"],
+              "organisations": ["Port Arden Heritage Trust"],
+              "locations": ["Old Customs House"],
+              "dates": ["20 April 2026", "1887"]
+            },
+            "facts": [
+              {
+                "claim": "The trust objects to the station design",
+                "match_any": ["object"],
+                "page": 1
+              },
+              {
+                "claim": "The entrance must not attach to the eastern wall",
+                "match_any": ["eastern wall"],
+                "page": 1
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "G05",
+      "name": "Chart image",
+      "purpose": "Values shown only in a chart image appear in the summary.",
+      "phase": 8,
+      "runs_in": ["real"],
+      "steps": [
+        {
+          "action": "upload",
+          "files": ["ridership-forecast"],
+          "expect": { "http_status": 202, "job_status": "queued" }
+        },
+        {
+          "action": "wait_until_final",
+          "expect": { "job_status": "succeeded" }
+        }
+      ],
+      "expect": {
+        "documents": {
+          "ridership-forecast": {
+            "inferred_type": "forecast",
+            "flagged": false,
+            "entities": {
+              "organisations": ["Port Arden Transport Planning Unit"],
+              "dates": ["May 2026"]
+            },
+            "facts": [
+              {
+                "claim": "31,000 weekday boardings by 2035",
+                "match_any": ["31,000", "31000", "31k"],
+                "page": 2
+              },
+              {
+                "claim": "18,000 weekday boardings in 2029",
+                "match_any": ["18,000", "18000", "18k"],
+                "page": 2
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "G06",
+      "name": "Full demo set",
+      "purpose": "All topic documents together produce a coherent report that covers environment and heritage as well as cost and timeline.",
+      "phase": 8,
+      "runs_in": ["real"],
+      "steps": [
+        {
+          "action": "upload",
+          "files": [
+            "council-report",
+            "news-article",
+            "contractor-release",
+            "environmental-assessment",
+            "heritage-letter",
+            "ridership-forecast",
+            "community-feedback"
+          ],
+          "expect": { "http_status": 202, "job_status": "queued" }
+        },
+        {
+          "action": "wait_until_final",
+          "expect": { "job_status": "succeeded" }
+        }
+      ],
+      "expect": {
+        "report": {
+          "common_themes": {
+            "min_matched": 4,
+            "themes": [
+              { "theme": "cost and funding", "match_any": ["cost", "fund", "budget"] },
+              { "theme": "timeline", "match_any": ["timeline", "schedule", "2028", "2029"] },
+              { "theme": "noise and residents", "match_any": ["noise", "resident"] },
+              { "theme": "environment", "match_any": ["frog", "wetland", "environment"] },
+              { "theme": "heritage", "match_any": ["heritage", "customs house"] },
+              { "theme": "ridership", "match_any": ["ridership", "boardings", "passengers"] }
+            ]
+          },
+          "contradictions_include_about": ["Project cost", "When passenger service starts"],
+          "flagged_documents": [],
+          "excluded_files": []
+        },
+        "judge": ["coverage", "conciseness", "faithfulness"]
+      }
+    },
+    {
+      "id": "G07",
+      "name": "Rejected file, continue without it",
+      "purpose": "A mixed upload waits for the analyst; confirming processes the valid files and lists the excluded one in the report.",
+      "phase": 3,
+      "runs_in": ["ci_mock", "real"],
+      "steps": [
+        {
+          "action": "upload",
+          "files": ["council-report", "news-article", "not-a-pdf"],
+          "expect": {
+            "http_status": 201,
+            "job_status": "awaiting_input",
+            "accepted": ["council-report.pdf", "news-article.pdf"],
+            "rejected": [{ "filename": "notes.pdf", "code": "unsupported_type" }]
+          }
+        },
+        {
+          "action": "get",
+          "expect": { "http_status": 200, "job_status": "awaiting_input" }
+        },
+        {
+          "action": "confirm",
+          "expect": { "http_status": 202, "job_status": "queued" }
+        },
+        {
+          "action": "wait_until_final",
+          "expect": { "job_status": "succeeded" }
+        }
+      ],
+      "expect": {
+        "report": {
+          "excluded_files": ["notes.pdf"]
+        }
+      }
+    },
+    {
+      "id": "G08",
+      "name": "Rejected file, re-upload a replacement",
+      "purpose": "Re-uploading adds the replacement to the job, which still waits for the analyst to confirm.",
+      "phase": 3,
+      "runs_in": ["ci_mock", "real"],
+      "steps": [
+        {
+          "action": "upload",
+          "files": ["council-report", "corrupt"],
+          "expect": {
+            "http_status": 201,
+            "job_status": "awaiting_input",
+            "rejected": [{ "filename": "corrupt.pdf", "code": "invalid_pdf" }]
+          }
+        },
+        {
+          "action": "reupload",
+          "files": ["contractor-release"],
+          "expect": {
+            "http_status": 200,
+            "job_status": "awaiting_input",
+            "accepted": ["council-report.pdf", "contractor-release.pdf"]
+          }
+        },
+        {
+          "action": "confirm",
+          "expect": { "http_status": 202, "job_status": "queued" }
+        },
+        {
+          "action": "wait_until_final",
+          "expect": { "job_status": "succeeded" }
+        }
+      ],
+      "expect": {
+        "report": {
+          "excluded_files": ["corrupt.pdf"],
+          "contradictions_include_about": ["Project cost"]
+        }
+      }
+    },
+    {
+      "id": "G09",
+      "name": "Cancel a waiting job",
+      "purpose": "Cancelling ends the job, deletes its files, and blocks further actions.",
+      "phase": 2,
+      "runs_in": ["ci_mock", "real"],
+      "steps": [
+        {
+          "action": "upload",
+          "files": ["council-report", "encrypted"],
+          "expect": { "http_status": 201, "job_status": "awaiting_input" }
+        },
+        {
+          "action": "cancel",
+          "expect": { "http_status": 200, "job_status": "cancelled", "stored_files_deleted": true }
+        },
+        {
+          "action": "confirm",
+          "expect": { "http_status": 409, "error_code": "invalid_job_state" }
+        },
+        {
+          "action": "get",
+          "expect": { "http_status": 200, "job_status": "cancelled" }
+        }
+      ]
+    },
+    {
+      "id": "G10",
+      "name": "Unknown job",
+      "purpose": "Reading a job that does not exist returns the standard error schema.",
+      "phase": 2,
+      "runs_in": ["ci_mock", "real"],
+      "steps": [
+        {
+          "action": "get",
+          "job_id": "00000000-0000-0000-0000-000000000000",
+          "expect": { "http_status": 404, "error_code": "job_not_found" }
+        }
+      ]
+    },
+    {
+      "id": "G11",
+      "name": "Progress while processing",
+      "purpose": "Polling shows each document moving through its states, and progress only increases.",
+      "phase": 3,
+      "runs_in": ["ci_mock"],
+      "steps": [
+        {
+          "action": "upload",
+          "files": ["council-report", "news-article"],
+          "expect": { "http_status": 202, "job_status": "queued" }
+        },
+        {
+          "action": "poll_until_final",
+          "expect": {
+            "job_status_sequence_subset": ["queued", "running", "consolidating", "succeeded"],
+            "document_status_sequence_subset": [
+              "pending",
+              "extracting",
+              "checking",
+              "summarising",
+              "succeeded"
+            ],
+            "progress_monotonic": true,
+            "final_progress_complete": true
+          }
+        }
+      ]
+    }
+  ]
+}

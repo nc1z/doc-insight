@@ -370,6 +370,10 @@ Document text is untrusted data. Guardrails run in layers, cheapest first.
 
 ### Evaluation
 
+- **Source of truth**: `backend/evals/golden.json` (expected outputs) and `backend/evals/adversarial.json` (expected safe behaviour), with source documents in `backend/evals/fixtures.json`. Each file sets its pass thresholds; each case lists API steps, expected statuses, and content expectations, and says whether it runs in CI on the mock (`ci_mock`) or against real models (`real`).
+- **Fictional topic**: the eval documents describe an invented project, so the model cannot pass by recalling facts it already knows.
+- **Canary**: every system prompt contains a canary string; any output containing it fails, catching system-prompt leaks.
+- **Flagging rule**: phrase or role-marker matches alone do not flag a document, so benign documents about prompt injection or with speaker labels are not flagged; the classifier decides. Hidden text, invisible characters, and encoded blobs flag on their own.
 - **Programmatic checks first**: schema validity, quotes found on their cited pages, entity recall, and topic coverage against the golden set.
 - **LLM judge for coverage and conciseness**, averaged over several runs, because single LLM-judge scores are inconsistent and overestimate faithfulness.
 - **Human spot-check** of the sample outputs, for what automated scoring misses.

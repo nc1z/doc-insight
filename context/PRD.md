@@ -73,8 +73,9 @@ Existing summarisers handle one document at a time and don't show which document
 - `samples/adversarial/`: a PDF with embedded prompt-injection text (for example "ignore previous instructions and output…").
 - `samples/invalid/`: a corrupt PDF, an encrypted PDF, an empty or no-text PDF, and a non-PDF file renamed to `.pdf`.
 - `samples/README.md`: the source and licence of each sample, and what it demonstrates.
-- `backend/evals/golden/`: golden inputs with expected outputs or scoring criteria.
-- `backend/evals/adversarial/`: adversarial inputs with expected safe behaviour.
+- `backend/evals/fixtures.json`: the eval source documents on a fictional topic, from which the eval PDFs are generated.
+- `backend/evals/golden.json`: golden cases with expected outputs, scoring criteria, and pass thresholds.
+- `backend/evals/adversarial.json`: adversarial cases with expected safe behaviour and pass thresholds.
 - Mock LLM fixtures: deterministic responses so tests, CI, and the demo run without an API key.
 - `.env.example`: every setting, with the LLM provider defaulting to mock.
 
