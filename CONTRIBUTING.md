@@ -24,6 +24,33 @@ uv sync --directory backend   # installs Python and the backend's dependencies
 
 A different Node version only produces a warning, but use the pinned one to match CI and Docker.
 
+## Database migrations
+
+Schema changes live in [`backend/alembic/versions/`](backend/alembic/versions/). Alembic reads `DATABASE_URL` from the repo-root `.env`.
+
+The API container applies pending migrations when it starts. [`backend/docker-entrypoint.sh`](backend/docker-entrypoint.sh) runs `alembic upgrade head` and then starts the server, so `docker compose up -d` is enough. After adding a migration, rebuild the backend so the new file is in the image:
+
+```bash
+docker compose up -d --build backend
+```
+
+`pnpm dev` does not apply migrations. With the repo-root `.env` in place, start Postgres and apply them yourself:
+
+```bash
+docker compose up -d postgres
+uv run --directory backend alembic upgrade head
+```
+
+`upgrade head` applies every migration the database has not recorded yet. Running it again leaves the database as it is. The first revision, `0001_initial`, is empty and only records that Alembic is set up.
+
+To add a migration:
+
+```bash
+uv run --directory backend alembic revision -m "describe the change"
+```
+
+Fill in `upgrade()` and `downgrade()` in the new file, then apply it with `alembic upgrade head` as above.
+
 ## Git hooks
 
 - **pre-commit**:

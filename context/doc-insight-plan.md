@@ -62,10 +62,12 @@ Defaults in `Settings` and `.env.example`: mock providers, 20 MiB / 100 pages / 
 
 ### 0B. Postgres, ORM, and Migrations
 
-- [ ] Add a `postgres` service to `docker-compose.yml` with a named volume and a healthcheck; the backend waits for it.
-- [ ] Add SQLAlchemy 2 (async) with psycopg 3, a session factory, and a FastAPI dependency for sessions.
-- [ ] Add Alembic with an empty initial migration; run `alembic upgrade head` on container start before the API starts.
-- [ ] Extend `/health` to report database connectivity, keeping the response shape Bruno already tests.
+- [x] Add a `postgres` service to `docker-compose.yml` with a named volume and a healthcheck; the backend waits for it.
+- [x] Add SQLAlchemy 2 (async) with psycopg 3, a session factory, and a FastAPI dependency for sessions.
+- [x] Add Alembic with an empty initial migration; run `alembic upgrade head` on container start before the API starts.
+- [x] Extend `/health` to report database connectivity, keeping the response shape Bruno already tests.
+
+A healthy database still returns `{ "status": "ok" }`. If the check fails, the route returns `503`. Compose sets `DATABASE_URL` to the `postgres` service. The container runs `alembic upgrade head` before the API starts. The empty revision is `0001_initial`.
 
 ### 0C. Errors, Logging, and Request IDs
 
@@ -92,7 +94,7 @@ Solves flow step 1: a client (Bruno) uploads PDFs and gets an immediate job ID.
 
 ### 1A. Data Model
 
-- [ ] Add `app/domain/` with SQLAlchemy models for the `jobs` and `documents` tables, and a migration: job status, document status, filename, storage key, SHA-256 hash, page count, rejection reason, and an `excluded` flag.
+- [ ] Add `app/domain/` with SQLAlchemy models for the `jobs` and `documents` tables: job status, document status, filename, storage key, SHA-256 hash, page count, rejection reason, and an `excluded` flag. Point Alembic `target_metadata` at those models and generate the migration with `alembic revision --autogenerate`.
 - [ ] Define job and document status enums in that package, matching the job and document states in the architecture.
 
 ### 1B. File Validation
