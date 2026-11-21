@@ -119,6 +119,7 @@ Existing summarisers handle one document at a time and don't show which document
 
 - The system shall select the LLM provider and model through configuration, with adapters for at least one hosted provider and a mock provider.
 - The system shall put the queue, job store, and file storage behind interfaces with swappable adapters.
+- The POC shall store uploads in MinIO through the S3 API. No cloud storage is configured.
 - The system shall load typed settings from environment variables.
 - The system shall log in a structured format with a request ID on every API log line and a job ID on every worker log line.
 - The system shall record tokens used and time taken per job.

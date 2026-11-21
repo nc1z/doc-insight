@@ -28,6 +28,7 @@ These are my decision records and thought process throughout planning & developm
 - `2026-11-21 15:18` **Polling `GET /jobs/{id}` for status and results** (`context/architecture.md`): the frontend polls one endpoint with TanStack Query every 1–2 seconds, only while the job is processing (`queued`, `running`, or `consolidating`). It does not poll while the job waits for the analyst (`awaiting_input`) or once it reaches a final state. Refresh and shared links work without extra logic because the URL holds the job ID, and the API stays stateless. Server-sent events are listed as an enhancement; they need a pub/sub layer and nginx changes, and would keep the same payload shape.
 
 - `2026-11-21 15:47` **All prompts in one central file** (`backend/app/pipeline/prompts.yaml`, `context/architecture.md`): system prompts, user templates, and Jev questions live in one file that maintainers edit, instead of prompt text spread across pipeline steps. Each entry is versioned and validated at startup, the version is recorded with every LLM call and used in the cache key, and changes to the file trigger the evals.
+- `2026-11-21 20:28` **MinIO for uploads** (`context/architecture.md`): for this POC, the API and worker store files in a local MinIO service through the S3 API, with no cloud account. In production the same adapter would point at AWS S3, and only the endpoint, bucket, and keys would change.
 
 ## Re-design based on Industry Practices
 

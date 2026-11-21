@@ -14,7 +14,7 @@ flowchart LR
 
     subgraph Backend
         API[API<br/>FastAPI] --> DB[(Postgres<br/>jobs, results, queue)]
-        API --> Files[(File storage)]
+        API --> Files[(MinIO<br/>S3 API)]
         Worker[Worker<br/>processing pipeline] --> DB
         Worker --> Files
     end
@@ -27,7 +27,7 @@ flowchart LR
 _Envisioned architecture if we were to go to production._ These parts swap in through adapters, with no changes to API or worker logic:
 
 - **Queue**: Postgres queue to SQS, with an outbox behind the same create-and-enqueue operation.
-- **File storage**: local storage to S3.
+- **File storage**: MinIO to AWS S3, a configuration change (endpoint, bucket, and keys). The adapter stays the same.
 - **LLM provider**: mock or hosted model to Bedrock or another provider.
 - **Job store**: Postgres to RDS Postgres, a configuration change only.
 
@@ -214,10 +214,10 @@ stateDiagram-v2
 - **One operation for create and enqueue.** Because the two writes are atomic, the adapter interface exposes them as a single operation. The Postgres adapter does it in one transaction; another queue provider would need an outbox behind the same interface.
 - **Only the job ID goes on the queue.** The worker loads the job from the job store and reads files from file storage by their storage keys.
 - **Orphaned files are cleaned up, not prevented.** If storing a file succeeds but creating the job fails, the file is left without a job. A retention rule or cleanup job deletes it, in line with the retention assumption in the PRD.
+- **Uploads go to MinIO.** The file storage adapter speaks the S3 API and points at a MinIO service in Docker Compose. No cloud account is required. Moving to AWS S3 later changes the endpoint, bucket, and keys.
 
 ### Open decisions
 
-- **File storage baseline**: a shared Docker volume, or MinIO so the S3 adapter is exercised locally.
 - **Queue library**: Procrastinate or PGQueuer. Pick the one that can enqueue on the same connection and transaction that creates the job.
 - **Error codes for limits**: whether oversized uploads or too many files return `413`, or are folded into the `422` per-file error list.
 - **Failures during processing**: whether the same choice applies when a document fails later (for example extraction or LLM failure), by pausing before consolidation.
