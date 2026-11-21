@@ -53,10 +53,12 @@ Goal: config, Postgres, migrations, error handling, and logging. Later phases ad
 
 ### 0A. Config
 
-- [ ] Add `app/core/` with `pydantic-settings` and a typed `Settings` class in `config.py` (database URL, storage path, file limits, provider names, model names, API keys, timeouts).
-- [ ] Add `.env.example` with every setting, defaulting providers to `mock`, so the stack runs with no API key.
-- [ ] Switch `app/main.py` to an app factory that wires settings, routers, and dependencies.
-- [ ] Add mypy to the dev dependencies and the `lint` script.
+- [x] Add `app/core/` with `pydantic-settings` and a typed `Settings` class in `config.py` (database URL, MinIO endpoint, bucket, and keys, file limits, provider names, model names, API keys, timeouts).
+- [x] Add `.env.example` with every setting, defaulting providers to `mock`, so the stack runs with no API key.
+- [x] Switch `app/main.py` to an app factory that wires settings, routers, and dependencies.
+- [x] Add mypy to the dev dependencies and the `lint` script.
+
+Defaults in `Settings` and `.env.example`: mock providers, 20 MiB / 100 pages / 10 files, 60s LLM timeout, 30s classifier timeout. A hosted provider refuses to start without its key (and, for the LLM, its base URL). `app = create_app()` stays at module level so `fastapi run app/main.py` keeps working. Job-expiry and step timeouts wait for the phases that use them.
 
 ### 0B. Postgres, ORM, and Migrations
 
@@ -100,11 +102,11 @@ Solves flow step 1: a client (Bruno) uploads PDFs and gets an immediate job ID.
 - [ ] Return a typed per-file result with an error code and message for each rejection.
 - [ ] Decide `413` versus a per-file `422` for limit errors, and record it in `decision-record.md`.
 
-### 1C. Local File Storage Adapter
+### 1C. MinIO File Storage
 
-- [ ] Add `app/adapters/` with `LocalFileStorage`, implementing a `FileStorage` protocol in `app/domain/ports.py`. It writes to a path from config, mounted as a shared Docker volume for the API and worker.
+- [ ] Add a `minio` service to `docker-compose.yml` with a named volume and a healthcheck. The API and worker use it. No cloud account.
+- [ ] Add `app/adapters/` with an S3 `FileStorage` implementation in `app/domain/ports.py`, pointed at the endpoint, bucket, and keys from config. Create the bucket on startup if it is missing.
 - [ ] Add a factory that picks the storage adapter from config and is injected through FastAPI dependencies. Later adapters register on the same factory.
-- [ ] Record the file storage baseline decision (shared volume versus MinIO) in `decision-record.md`.
 
 ### 1D. Queue Library and Create-and-Enqueue
 
@@ -195,7 +197,7 @@ Solves flow step 3: the worker claims the job and moves it through every state.
 ### 3B. Worker Process
 
 - [ ] Add `app/worker/` with the worker entry point, using the queue library and the same adapter factory as the API. It runs from the same image with a different command.
-- [ ] Add a `worker` service to `docker-compose.yml` sharing the storage volume and database.
+- [ ] Add a `worker` service to `docker-compose.yml` using the same MinIO service and database.
 - [ ] Make every step idempotent: store each step's status, and skip steps already completed on retry.
 
 ### 3C. Pipeline Skeleton

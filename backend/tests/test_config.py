@@ -1,0 +1,104 @@
+from pathlib import Path
+
+import pytest
+from pydantic import ValidationError
+
+from app.core.config import Settings
+
+_ENV_KEYS = (
+    "DATABASE_URL",
+    "S3_ENDPOINT",
+    "S3_BUCKET",
+    "S3_REGION",
+    "S3_ACCESS_KEY",
+    "S3_SECRET_KEY",
+    "MAX_FILE_BYTES",
+    "MAX_PAGE_COUNT",
+    "MAX_FILE_COUNT",
+    "LLM_PROVIDER",
+    "LLM_MODEL",
+    "LLM_BASE_URL",
+    "LLM_API_KEY",
+    "LLM_TIMEOUT_SECONDS",
+    "CLASSIFIER_PROVIDER",
+    "CLASSIFIER_MODEL",
+    "CLASSIFIER_API_KEY",
+    "CLASSIFIER_TIMEOUT_SECONDS",
+)
+
+
+def _clear_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    for key in _ENV_KEYS:
+        monkeypatch.delenv(key, raising=False)
+
+
+def test_mock_defaults_need_no_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    _clear_env(monkeypatch)
+
+    settings = Settings(_env_file=None)
+
+    assert settings.llm_provider == "mock"
+    assert settings.classifier_provider == "mock"
+    assert settings.llm_api_key.get_secret_value() == ""
+    assert settings.classifier_api_key.get_secret_value() == ""
+    assert settings.max_file_bytes == 20 * 1024 * 1024
+    assert settings.s3_endpoint == "http://localhost:9000"
+    assert settings.s3_bucket == "doc-insight"
+    assert settings.s3_access_key.get_secret_value() == "docinsight"
+    assert settings.s3_secret_key.get_secret_value() == "docinsight"
+
+
+def test_environment_overrides_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    _clear_env(monkeypatch)
+    monkeypatch.setenv("MAX_FILE_COUNT", "3")
+    monkeypatch.setenv("LLM_TIMEOUT_SECONDS", "15")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.max_file_count == 3
+    assert settings.llm_timeout_seconds == 15
+
+
+def test_hosted_llm_requires_base_url_and_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    _clear_env(monkeypatch)
+
+    with pytest.raises(ValidationError, match="LLM_BASE_URL and LLM_API_KEY"):
+        Settings(_env_file=None, llm_provider="openai_compatible")
+
+
+def test_hosted_llm_accepts_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
+    _clear_env(monkeypatch)
+
+    settings = Settings(
+        _env_file=None,
+        llm_provider="openai_compatible",
+        llm_base_url="https://example.test/v1",
+        llm_api_key="test-key",
+    )
+
+    assert settings.llm_api_key.get_secret_value() == "test-key"
+
+
+def test_jev_requires_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    _clear_env(monkeypatch)
+
+    with pytest.raises(ValidationError, match="CLASSIFIER_API_KEY"):
+        Settings(_env_file=None, classifier_provider="jev")
+
+
+def test_limits_must_be_positive(monkeypatch: pytest.MonkeyPatch) -> None:
+    _clear_env(monkeypatch)
+
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, max_file_count=0)
+
+
+def test_env_example_lists_every_setting() -> None:
+    example = Path(__file__).resolve().parents[2] / ".env.example"
+    names = {
+        line.split("=", 1)[0]
+        for line in example.read_text().splitlines()
+        if line.strip() and not line.startswith("#") and "=" in line
+    }
+
+    assert names == {name.upper() for name in Settings.model_fields}
