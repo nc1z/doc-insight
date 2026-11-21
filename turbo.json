@@ -14,9 +14,6 @@
     "typecheck": {},
     "test": {
       "outputs": ["coverage/**"]
-    },
-    "format": {
-      "cache": false
     }
   }
 }
