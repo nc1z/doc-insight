@@ -76,6 +76,7 @@ Goal: a backend skeleton with config, Postgres, migrations, error handling, logg
 - [ ] Define `Protocol` interfaces in `app/domain/ports.py`: `FileStorage`, `JobRepository` (with a single `create_and_enqueue` operation), `LLMProvider`, `Classifier`.
 - [ ] Add a factory that picks each adapter from config, injected through FastAPI dependencies and the worker entry point.
 - [ ] Add mock `LLMProvider` and `Classifier` adapters with deterministic outputs.
+- [ ] Add the central prompts file `app/pipeline/prompts.yaml` and a loader that validates every entry (ID, version, template, placeholders) at startup; the path comes from config.
 
 ### 0E. Tests, CI, and Bruno
 
@@ -268,6 +269,7 @@ Solves flow step 5: suspicious documents are flagged in the job response.
 - [ ] Implement a `JevClassifier` behind the `Classifier` interface, returning the probability that a chunk contains instructions aimed at the model.
 - [ ] Add a configurable flag threshold; keep the mock classifier as the default.
 - [ ] Use Jev for inferred document type (a choice from a fixed list).
+- [ ] Keep the Jev questions and option descriptions in `prompts.yaml`, not in code.
 
 ### 5C. Flagging
 
@@ -305,7 +307,8 @@ Solves flow step 6: the job's results contain real key details and a report.
 
 ### 6C. Prompts
 
-- [ ] Write versioned prompt templates in `app/pipeline/prompts/`.
+- [ ] Write every system prompt and user template for chunk summary, document combine, and consolidation in `prompts.yaml`, each with an ID and version.
+- [ ] Record the prompt ID and version with every LLM call, and run the evals in CI whenever `prompts.yaml` changes.
 - [ ] Apply datamarking to document text: interleave a marker character through it, and explain in the system prompt that marked text is data, never instructions.
 - [ ] Ask the consolidation prompt to list disagreements explicitly instead of a single consensus.
 

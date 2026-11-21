@@ -376,6 +376,15 @@ Document text is untrusted data. Guardrails run in layers, cheapest first.
 - **Contradiction case**: the golden set includes a pair of documents that disagree on purpose; the report must surface both sides.
 - **Reasoning modes** are compared through evals before being enabled, since more reasoning does not reliably improve summaries.
 
+### Prompts in one file
+
+- Every prompt the pipeline uses lives in one file, `backend/app/pipeline/prompts.yaml`: system prompts, user prompt templates, and Jev questions with their option descriptions.
+- Maintainers tune behaviour by editing that file only; no prompt text lives in code.
+- Each entry has an ID, a version, and a template with named placeholders (for example `{document_text}`).
+- The file is loaded and validated at startup: a missing prompt or an unknown placeholder fails fast instead of failing mid-job.
+- The prompt ID and version are recorded with every LLM call, used in the cache key, and changing the file triggers the evals.
+- The file path is configurable, so a different prompt set can be swapped in without code changes.
+
 ### Model choice per step
 
 Each step picks its model through configuration (strategy pattern). The pipeline has few judgement calls: control flow is fixed, and most work is generating structured summaries. So the steps split into two kinds, each with a model suited to it.
