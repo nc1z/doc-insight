@@ -51,6 +51,16 @@ uv run --directory backend alembic revision -m "describe the change"
 
 Fill in `upgrade()` and `downgrade()` in the new file, then apply it with `alembic upgrade head` as above.
 
+## File storage
+
+Uploads go to MinIO. `docker compose up -d` starts it with the API. For `pnpm dev`, start MinIO first so the API can create its bucket:
+
+```bash
+docker compose up -d minio
+```
+
+The API container uses `http://minio:9000`. A process on the host uses `S3_ENDPOINT` from the repo-root `.env`, which points at `http://localhost:9000`.
+
 ## Backend tests
 
 `uv run --directory backend pytest` includes tests that use the `postgres-test` container. That server is separate from the app database on port 5432. Start it with:

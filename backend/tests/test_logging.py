@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from app.core.config import Settings
 from app.core.logging import JsonFormatter
 from app.main import create_app
+from tests.doubles import IdleFileStorage
 
 _REQUEST_ID = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 
@@ -46,7 +47,8 @@ def test_request_log_keeps_a_supplied_request_id(caplog: pytest.LogCaptureFixtur
             _env_file=None,
             llm_provider="mock",
             classifier_provider="mock",
-        )
+        ),
+        file_storage=IdleFileStorage(),
     )
 
     @application.get("/ping")
@@ -69,7 +71,8 @@ def test_unsafe_request_id_is_replaced() -> None:
             _env_file=None,
             llm_provider="mock",
             classifier_provider="mock",
-        )
+        ),
+        file_storage=IdleFileStorage(),
     )
 
     @application.get("/ping")

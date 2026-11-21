@@ -7,6 +7,7 @@ from app.core.config import Settings
 
 _ENV_KEYS = (
     "DATABASE_URL",
+    "STORAGE_PROVIDER",
     "S3_ENDPOINT",
     "S3_BUCKET",
     "S3_REGION",
@@ -42,6 +43,7 @@ def test_mock_defaults_need_no_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.llm_api_key.get_secret_value() == ""
     assert settings.classifier_api_key.get_secret_value() == ""
     assert settings.max_file_bytes == 20 * 1024 * 1024
+    assert settings.storage_provider == "s3"
     assert settings.s3_endpoint == "http://localhost:9000"
     assert settings.s3_bucket == "doc-insight"
     assert settings.s3_access_key.get_secret_value() == "docinsight"

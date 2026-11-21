@@ -8,6 +8,7 @@ from sqlalchemy.exc import OperationalError
 from app.core.config import Settings, get_settings
 from app.core.db import create_engine, get_session
 from app.main import create_app
+from tests.doubles import IdleFileStorage
 
 
 class _HealthySession:
@@ -34,7 +35,8 @@ def test_health() -> None:
             _env_file=None,
             llm_provider="mock",
             classifier_provider="mock",
-        )
+        ),
+        file_storage=IdleFileStorage(),
     )
     application.dependency_overrides[get_session] = _healthy_session
 
@@ -51,7 +53,8 @@ def test_health_reports_database_outage() -> None:
             _env_file=None,
             llm_provider="mock",
             classifier_provider="mock",
-        )
+        ),
+        file_storage=IdleFileStorage(),
     )
     application.dependency_overrides[get_session] = _unavailable_session
 
@@ -101,7 +104,8 @@ def test_health_reads_migrated_database(migrated_database_url: str) -> None:
             database_url=migrated_database_url,
             llm_provider="mock",
             classifier_provider="mock",
-        )
+        ),
+        file_storage=IdleFileStorage(),
     )
 
     with TestClient(application) as client:

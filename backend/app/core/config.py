@@ -8,6 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 _BACKEND_DIR = Path(__file__).resolve().parents[2]
 _REPO_ROOT = _BACKEND_DIR.parent
 
+StorageProvider = Literal["s3"]
 LlmProvider = Literal["mock", "openai_compatible"]
 ClassifierProvider = Literal["mock", "jev"]
 
@@ -20,6 +21,7 @@ class Settings(BaseSettings):
     )
 
     database_url: str = "postgresql+psycopg://docinsight:docinsight@localhost:5432/docinsight"
+    storage_provider: StorageProvider = "s3"
     s3_endpoint: str = "http://localhost:9000"
     s3_bucket: str = Field(default="doc-insight", min_length=1)
     s3_region: str = "us-east-1"

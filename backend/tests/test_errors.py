@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from app.core.config import Settings
 from app.core.errors import DomainError
 from app.main import create_app
+from tests.doubles import IdleFileStorage
 
 
 @pytest.fixture
@@ -16,7 +17,8 @@ def client() -> Iterator[TestClient]:
             _env_file=None,
             llm_provider="mock",
             classifier_provider="mock",
-        )
+        ),
+        file_storage=IdleFileStorage(),
     )
 
     @application.get("/boom")

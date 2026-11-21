@@ -116,9 +116,11 @@ Solves flow step 1: a client (Bruno) uploads PDFs and gets an immediate job ID.
 
 ### 1C. MinIO File Storage
 
-- [ ] Add a `minio` service to `docker-compose.yml` with a named volume and a healthcheck. The API and worker use it. No cloud account.
-- [ ] Add `app/adapters/` with an S3 `FileStorage` implementation in `app/domain/ports.py`, pointed at the endpoint, bucket, and keys from config. Create the bucket on startup if it is missing.
-- [ ] Add a factory that picks the storage adapter from config and is injected through FastAPI dependencies. Later adapters register on the same factory.
+- [x] Add a `minio` service to `docker-compose.yml` with a named volume and a healthcheck. The API and worker use it. No cloud account.
+- [x] Add `app/adapters/` with an S3 `FileStorage` implementation in `app/domain/ports.py`, pointed at the endpoint, bucket, and keys from config. Create the bucket on startup if it is missing.
+- [x] Add a factory that picks the storage adapter from config and is injected through FastAPI dependencies. Later adapters register on the same factory.
+
+MinIO runs in Compose with the `minio_data` volume. The image is `alpine/minio`, a community mirror, because `minio/minio` no longer pulls. The API container uses `http://minio:9000` and creates the bucket on startup. `FileStorage` is the port. `S3FileStorage` is the adapter, and `build_file_storage` selects it from `storage_provider`. `get_file_storage` injects that instance. The worker service arrives later and uses the same bucket.
 
 ### 1D. Queue Library and Create-and-Enqueue
 
