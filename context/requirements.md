@@ -9,13 +9,35 @@
   - "PDFs may contain text and images": they will check whether you handle images or scanned PDFs, or at least acknowledge the gap.
   - "Harmful documents (adversarial content)": they will check whether you know about **prompt injection** in RAG/LLM pipelines.
 
+### Key insights from the wording
+
+- **"Regularly"**: this happens often, so optimise for a repeatable workflow (fast re-runs, consistent output, caching by file hash), not a one-off tool.
+- **"Multiple documents"**: assume a reasonable number per upload (for example up to 10 PDFs of moderate length), and enforce it with configurable limits.
+- **"A quick way"**: speed matters to the user. Async processing (see [direction.md](direction.md)) can seem to contradict this, so async must feel fast:
+  - Return immediately and show live per-document progress.
+  - Process documents in parallel and show each result as soon as it is ready, before the consolidated report finishes.
+  - Keep total time low; async exists to avoid timeouts and scale, not to make the user wait.
+- **"Simple web application"**: keep what the user sees simple. Upload, watch progress, read results. Complexity belongs in the backend, not the UI.
+- **"PDFs may contain text and images"**: PDF is the only input format for the MVP. Images mean extracting embedded images and charts, and OCR or a multimodal LLM for scanned pages.
+- **"Analyses and understands content"**: an LLM interprets the parsed content. Break processing into explicit pipeline stages (validate, extract, chunk, analyse, validate output) rather than one prompt.
+- **"Generates key details… and a consolidated summary report"**: a transform step that turns raw content into two structured outputs, per document and across documents.
+- **"Displays the generated results through a web interface"**: results must be readable and well presented, not raw JSON.
+
+### Overall shape: an ETL pipeline
+
+- **Extract**: validate uploads, then parse PDF text, images, and scanned pages (OCR) per page.
+- **Transform**: LLM analysis per document, then consolidation across documents, each validated against a schema.
+- **Load**: store results and job state, then serve them to the UI.
+
+Treating it as ETL keeps each stage separate, testable, and swappable, and maps directly onto queues and background workers.
+
 ## Baseline (must have)
 
 ### Backend (`backend/`)
 
 - Python + FastAPI, with RESTful resource-oriented endpoints, e.g.:
-  - `POST /documents` or `/analyses` (multipart, multiple files)
-  - `GET /analyses/{id}` (status + results)
+  - `POST /jobs` (multipart, multiple files)
+  - `GET /jobs/{id}` (status + results)
   - `GET /health`
 - PDF text extraction (e.g. PyMuPDF/pdfplumber).
 - LLM pipeline using a hosted API (no training or fine-tuning needed).
@@ -85,7 +107,7 @@
   - Entity relationship graph or timeline visualisation.
 - Live per-document progress streaming (SSE).
 - Evaluation harness: a small golden set plus checks (schema validity, entity recall, injection resistance) run in CI.
-- Cost/latency telemetry per analysis (tokens used, time taken) shown in the UI or logs.
+- Cost/latency telemetry per job (tokens used, time taken) shown in the UI or logs.
 - Caching by file hash, so re-uploads are instant and free.
 - Works offline with a local model (Ollama) or mock mode, so the reviewer can run it without an API key.
 - Short demo GIF/video in the README.
