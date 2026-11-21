@@ -6,3 +6,4 @@
 - `2026-11-21 10:21` **Reusable prompts in `.agents/prompts/`, before development starts**: streamline the workflow (PRD, plan, execute, explain, commit, docs cleanup) so each step is repeatable; `.agents/` keeps them tool-agnostic rather than tied to one AI tool.
 - `2026-11-21 10:48` **React + Vite + TypeScript for the frontend**: simple, agent-native (LLMs write it well), scales as the app grows, and fits a single-page upload-and-report UI.
 - `2026-11-21 11:00` **FastAPI + uv for the backend**: simple, agent-native, and scalable; FastAPI's Pydantic models fit structured LLM output, and uv manages Python itself plus a lockfile, so setup is one tool.
+- `2026-11-21 11:12` **Bruno for API testing**: collections are plain-text files in the repo (versioned and reviewed with the code), offline, no account needed; the collection lives in `backend/bruno/` and can run in CI through the Bruno CLI later.

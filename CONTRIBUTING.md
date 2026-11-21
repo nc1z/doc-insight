@@ -8,6 +8,7 @@ Development tooling for working on this repo. Not required to run the app (see [
 - [pnpm](https://pnpm.io/installation) — install it standalone (macOS: `brew install pnpm`), not through a Node version, so it survives Node upgrades. The exact version is pinned in `packageManager` in [`package.json`](package.json) and pnpm switches to it automatically.
 - [uv](https://docs.astral.sh/uv/getting-started/installation/) — manages Python and the backend's dependencies (macOS: `brew install uv`). Python does not need to be installed separately: uv downloads the version pinned in [`backend/.python-version`](backend/.python-version) automatically.
 - [gitleaks](https://github.com/gitleaks/gitleaks#installing) — only needed to **commit** (the pre-commit hook runs it). Not needed to install or run anything (macOS: `brew install gitleaks`).
+- [Bruno](https://www.usebruno.com/downloads) — optional, for manual API testing (macOS: `brew install --cask bruno`).
 
 ## Setup
 
@@ -39,6 +40,19 @@ Allowed types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `buil
 - `pnpm format` formats the whole repo with Prettier.
 - `pnpm format:check` checks formatting without writing changes (used in CI).
 - Backend Python code uses Ruff: run `uv run ruff format` in `backend/`. `pnpm lint` checks it.
+- `backend/bruno/` is excluded from Prettier because the Bruno app writes those files.
+
+## API testing
+
+The Bruno collection is in [`backend/bruno/`](backend/bruno/).
+
+1. Start the backend: `pnpm dev`.
+2. In Bruno, choose **Open Collection** and select `backend/bruno/`.
+3. Select the `local` environment, which points to `http://localhost:8000`.
+
+To run the whole collection from the terminal instead, run `pnpm dlx @usebruno/cli run --env local` in `backend/bruno/`.
+
+Add a request for each new endpoint, with tests or assertions for the expected response.
 
 ## Dependency policy
 

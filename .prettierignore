@@ -3,3 +3,6 @@ dist/
 build/
 coverage/
 .turbo/
+
+# Written by the Bruno app
+backend/bruno/
