@@ -88,7 +88,7 @@ sequenceDiagram
 - **Validation happens twice.** The client check gives fast feedback. The server check is the one that is enforced, because client checks can be bypassed.
 - **Server validation** checks MIME type, `%PDF` magic bytes, size, page count, encryption, and JavaScript or embedded files.
 - **Files rejected on the client** are shown with reasons before upload, so the analyst can replace or remove them first.
-- **`202 Accepted`** means the job is queued, not that it has finished. The UI follows progress separately (see the status flow, to be designed).
+- **`202 Accepted`** means the job is queued, not that it has finished. The UI follows progress through the [status flow](#status-flow).
 
 ### Negative case: all files rejected
 
@@ -223,6 +223,97 @@ stateDiagram-v2
 - **Failures during processing**: whether the same choice applies when a document fails later (for example extraction or LLM failure), by pausing before consolidation.
 - **Timeout for `awaiting_input`**: how long a job waits for a decision before it expires.
 
+## Status flow
+
+How the UI learns a job's progress and gets its results.
+
+```mermaid
+sequenceDiagram
+    participant UI as Frontend (TanStack Query)
+    participant API as API
+    participant Jobs as Job store (Postgres)
+
+    loop Every 1–2 seconds while queued, running, or consolidating
+        UI->>API: GET /jobs/{id}
+        API->>Jobs: Load job, documents, and results
+        API-->>UI: 200 OK (status, progress, documents, report)
+    end
+    UI->>UI: Stop polling at a final state
+```
+
+- **Polling, not server-sent events.** Refresh and shared links work for free, because the URL holds the job ID and every poll fetches the current state. The API stays stateless, with no pub/sub layer or nginx buffering changes.
+- **One endpoint returns everything** the UI needs. An unknown ID returns `404`.
+- **Polling stops at a final state**: `succeeded`, `failed`, `cancelled`, or `expired`. The UI does not poll while a job is `awaiting_input`, because only the analyst can change it.
+
+### Response
+
+```json
+{
+  "id": "…",
+  "status": "running",
+  "progress": { "completed_steps": 7, "total_steps": 12 },
+  "documents": [
+    {
+      "id": "…",
+      "filename": "a.pdf",
+      "status": "summarising",
+      "flagged": false,
+      "error": null,
+      "summary": null
+    },
+    {
+      "id": "…",
+      "filename": "b.pdf",
+      "status": "succeeded",
+      "flagged": true,
+      "error": null,
+      "summary": {}
+    }
+  ],
+  "rejected_files": [],
+  "excluded_files": [],
+  "report": null,
+  "error": null
+}
+```
+
+- `summary` is filled in for each document as it finishes, and `report` once consolidation is done.
+- `error` uses the same error schema as the rest of the API.
+
+### Job states
+
+```mermaid
+stateDiagram-v2
+    [*] --> awaiting_input: some files rejected
+    [*] --> queued: all files valid
+    awaiting_input --> queued: confirm
+    awaiting_input --> cancelled: cancel
+    awaiting_input --> expired: timeout
+    queued --> running: worker claims job
+    running --> consolidating: all documents finished
+    consolidating --> succeeded
+    running --> failed: unrecoverable error
+    consolidating --> failed: unrecoverable error
+```
+
+### Document states
+
+- `pending`, then `extracting`, `checking` (guardrails), `summarising`, and finally `succeeded` or `failed`.
+- `flagged` is a separate true-or-false field, because a document can be flagged and still succeed.
+
+### What the UI shows
+
+| Job status                           | Screen                                             |
+| ------------------------------------ | -------------------------------------------------- |
+| `awaiting_input`                     | Rejected files with the three choices              |
+| `queued`, `running`, `consolidating` | Progress bar, document states, and flags           |
+| `succeeded`                          | Transition into the report                         |
+| `failed`, `cancelled`, `expired`     | Message with the reason, and a link back to upload |
+
+### Status open decisions
+
+- **Showing results early**: fill in document tabs during progress as each document finishes, or reveal the whole report at the end. The response supports both.
+
 ## LLM processing pipeline
 
 What the worker does with a queued job, from extracted text to a stored consolidated report.
@@ -231,7 +322,7 @@ What the worker does with a queued job, from extracted text to a stored consolid
 flowchart TD
     subgraph PerDoc[Per document, in parallel]
         Extract[Extract<br/>text per page, images, OCR fallback] --> Checks[Programmatic guardrails<br/>injection patterns, hidden text,<br/>invisible characters]
-        Checks --> Classifier[Small-model guardrail<br/>injection classifier]
+        Checks --> Classifier[Decision-model guardrail<br/>injection classifier]
         Classifier --> Summarise[Document summary<br/>chunk, summarise, combine]
         Summarise --> ValidateDoc[Output validation<br/>schema, citations]
     end
@@ -257,7 +348,7 @@ flowchart TD
 Document text is untrusted data. Guardrails run in layers, cheapest first.
 
 - **Programmatic checks**: patterns such as "ignore previous instructions" or fake role markers, hidden text (white or tiny font), invisible Unicode characters, and long encoded blobs.
-- **Small-model classifier**: a small, cheap model scores each chunk for prompt injection. It sits behind the LLM provider adapter, so the model is configurable.
+- **Decision-model classifier**: a fast, cheap decision model returns the probability that each chunk contains instructions aimed at the model. It sits behind its own classifier interface (`classify(text) -> label, score`), not the LLM adapter, because decision models do not take prompts or generate text.
 - **Prompt hardening**: document text is wrapped in clear delimiters, and system instructions say never to follow instructions inside documents.
 - **Output validation**: every LLM response is checked against its schema and retried on invalid output. Citations are checked programmatically: the cited page must contain the quoted text.
 - **Flagged documents** are marked on the job and shown in the UI with a warning, never dropped silently.
@@ -276,7 +367,16 @@ Document text is untrusted data. Guardrails run in layers, cheapest first.
 
 ### Model choice per step
 
-Each step picks its model through configuration (strategy pattern): a small, cheap model for the guardrail classifier, and a stronger model for summaries and consolidation.
+Each step picks its model through configuration (strategy pattern). The pipeline has few judgement calls: control flow is fixed, and most work is generating structured summaries. So the steps split into two kinds, each with a model suited to it.
+
+- **Decisions: [Jev](https://typesafe.ai/blog/introducing-system-one-models-and-jev)** (TypeSafe AI). A non-generative decision model: it takes text plus typed questions and returns a fixed option, a rubric score, or a yes/no probability, with calibrated confidence. Outputs are type-safe by construction, it is very fast, and input costs about $0.04 per million tokens with free output. Used for:
+  - Prompt-injection detection per chunk (yes/no probability, with a configurable threshold).
+  - Inferred document type (choice from a fixed list).
+- **Generation: GLM 4.7 or later** (Z.AI). Used for document summaries and consolidation, where the output is free text inside a schema (summaries, entities, themes, contradictions).
+  - Request JSON output, then validate it against the Pydantic schema and retry on invalid output.
+  - GLM 4.7 honours JSON mode, which guarantees valid JSON but not the schema's shape. Newer GLM versions support schema-constrained output, which reduces retries.
+- **Limits**: Jev cannot write summaries or extract free-text entities, and its input is capped at 32k tokens per request, which fits chunk-level checks. A valid typed answer can still be wrong, so its thresholds are tuned on the adversarial eval set.
+- **Swappable**: Jev sits behind the classifier interface and GLM behind the LLM adapter, so either can be replaced through configuration. The mock adapters remain the default for tests and CI.
 
 ### Stored in Postgres
 
@@ -289,7 +389,8 @@ Each step picks its model through configuration (strategy pattern): a small, che
 ### Pipeline open decisions
 
 - **Flagged documents**: process them with hardened prompts and a warning, or pause the job for the analyst to decide, as with rejected files.
-- **Classifier model**: a dedicated prompt-injection classifier, or a small general LLM with a classification prompt.
+- **GLM version**: GLM 4.7 with JSON mode and validation, or a newer version with schema-constrained output.
+- **Injection threshold**: the Jev probability above which a chunk is flagged, tuned on the adversarial eval set.
 - **Chunk size and token budget** per model.
 
 ## UI/UX
@@ -350,6 +451,12 @@ Good to have for scaling the system.
 - Consolidation can be cached the same way, keyed by the set of document hashes plus the pipeline version.
 - Guardrail results are cached with the summary, so a flagged document stays flagged on re-upload.
 - In production with multiple tenants, the cache is scoped per tenant, so one tenant's upload never reveals or reuses another's results.
+
+### Server-sent events
+
+- Replace polling with server-sent events for instant updates and fewer requests.
+- Needs a pub/sub layer (for example Postgres `LISTEN/NOTIFY`), so any API instance can push the worker's updates, and nginx buffering turned off for that route.
+- The event payload keeps the same shape as the `GET /jobs/{id}` response, so the UI changes only how it receives updates.
 
 ### Retries
 
