@@ -2,7 +2,7 @@
 
 This plan builds doc-insight in phases, following [architecture.md](architecture.md) and [PRD.md](PRD.md). The backend comes first: foundations, then the upload and job API, then a worker running a mocked pipeline end to end, then real extraction, guardrails, and LLM steps. Every backend phase is testable through Bruno before any UI exists. The frontend starts only once the backend is complete, and builds against the `GET /jobs/{id}` contract defined in the architecture.
 
-Every external dependency is built behind an interface from the start, with a mock or local adapter as the baseline. Real providers are added later as new adapters, not rewrites. Out of scope for this plan: production AWS infrastructure, authentication, and the optional AI feature (considered only after the final acceptance pass).
+Every external dependency is built behind an interface, with a mock or local adapter as the baseline. The interface and its first adapter are added in the phase that first uses that dependency. Real providers are added later as new adapters, not rewrites. Add a package only in the phase that first puts a file in it; do not scaffold empty directories ahead of that work. Out of scope for this plan: production AWS infrastructure, authentication, and the optional AI feature (considered only after the final acceptance pass).
 
 Primary services/packages/frameworks:
 
@@ -49,12 +49,11 @@ This plan follows the main user/system lifecycle directly:
 
 ## 0. Backend Foundations
 
-Goal: a backend skeleton with config, Postgres, migrations, error handling, logging, and adapter interfaces, so later phases only add behaviour.
+Goal: config, Postgres, migrations, error handling, and logging. Later phases add their own packages with the feature that needs them.
 
-### 0A. Project Layout and Config
+### 0A. Config
 
-- [ ] Create the layered layout: `app/api/`, `app/domain/`, `app/adapters/`, `app/pipeline/`, `app/schemas/`, `app/core/`, `app/worker/`.
-- [ ] Add `pydantic-settings` with a typed `Settings` class in `app/core/config.py` (database URL, storage path, file limits, provider names, model names, API keys, timeouts).
+- [ ] Add `app/core/` with `pydantic-settings` and a typed `Settings` class in `config.py` (database URL, storage path, file limits, provider names, model names, API keys, timeouts).
 - [ ] Add `.env.example` with every setting, defaulting providers to `mock`, so the stack runs with no API key.
 - [ ] Switch `app/main.py` to an app factory that wires settings, routers, and dependencies.
 - [ ] Add mypy to the dev dependencies and the `lint` script.
@@ -68,27 +67,20 @@ Goal: a backend skeleton with config, Postgres, migrations, error handling, logg
 
 ### 0C. Errors, Logging, and Request IDs
 
-- [ ] Define one error schema (`code`, `message`, `details`) and exception handlers that map domain errors to HTTP status codes.
+- [ ] Define one error schema (`code`, `message`, `details`) and the exception handlers that map domain errors to HTTP status codes, both in `app/core/`.
 - [ ] Add structured JSON logging with a request ID middleware; return the ID in an `X-Request-ID` header.
 
-### 0D. Adapter Interfaces and Mocks
-
-- [ ] Define `Protocol` interfaces in `app/domain/ports.py`: `FileStorage`, `JobRepository` (with a single `create_and_enqueue` operation), `LLMProvider`, `Classifier`.
-- [ ] Add a factory that picks each adapter from config, injected through FastAPI dependencies and the worker entry point.
-- [ ] Add mock `LLMProvider` and `Classifier` adapters with deterministic outputs.
-- [ ] Add the central prompts file `app/pipeline/prompts.yaml` and a loader that validates every entry (ID, version, template, placeholders) at startup; the path comes from config.
-
-### 0E. Tests, CI, and Bruno
+### 0D. Tests, CI, and Bruno
 
 - [ ] Add a pytest fixture that runs migrations against a test database, and a test for `/health`.
 - [ ] Add a Postgres service container to the CI `ci` job so backend tests run against a real database.
 - [ ] Confirm the CI `docker` job still passes with the new Postgres service.
 
-### 0F. Learning Checkpoint
+### 0E. Learning Checkpoint
 
-- [ ] Learning: explain the code changes in small chunks with file names, short snippets, layman explanations, and how the layout, config, and adapter interfaces let later phases swap providers without rewrites.
+- [ ] Learning: explain the code changes in small chunks with file names, short snippets, layman explanations, and how config, the database session, and error handling give later phases a base to build on. Packages for domain, adapters, API, pipeline, and worker are not created here.
 
-Suggested commit message: `feat(backend): add config, postgres, migrations, and adapter interfaces`
+Suggested commit message: `feat(backend): add config, postgres, and migrations`
 
 ## 1. Upload and Job Creation
 
@@ -98,8 +90,8 @@ Solves flow step 1: a client (Bruno) uploads PDFs and gets an immediate job ID.
 
 ### 1A. Data Model
 
-- [ ] Add `jobs` and `documents` tables with a migration: job status, document status, filename, storage key, SHA-256 hash, page count, rejection reason, and an `excluded` flag.
-- [ ] Define job and document status enums matching the job and document states in the architecture.
+- [ ] Add `app/domain/` with SQLAlchemy models for the `jobs` and `documents` tables, and a migration: job status, document status, filename, storage key, SHA-256 hash, page count, rejection reason, and an `excluded` flag.
+- [ ] Define job and document status enums in that package, matching the job and document states in the architecture.
 
 ### 1B. File Validation
 
@@ -110,16 +102,18 @@ Solves flow step 1: a client (Bruno) uploads PDFs and gets an immediate job ID.
 
 ### 1C. Local File Storage Adapter
 
-- [ ] Implement `LocalFileStorage` writing to a path from config, mounted as a shared Docker volume for the API and worker.
+- [ ] Add `app/adapters/` with `LocalFileStorage`, implementing a `FileStorage` protocol in `app/domain/ports.py`. It writes to a path from config, mounted as a shared Docker volume for the API and worker.
+- [ ] Add a factory that picks the storage adapter from config and is injected through FastAPI dependencies. Later adapters register on the same factory.
 - [ ] Record the file storage baseline decision (shared volume versus MinIO) in `decision-record.md`.
 
 ### 1D. Queue Library and Create-and-Enqueue
 
 - [ ] Confirm which library (Procrastinate or PGQueuer) can enqueue on the same connection and transaction that creates the job; pick it and record the decision.
-- [ ] Implement `PostgresJobRepository.create_and_enqueue` so the job row and the queue entry commit in one transaction.
+- [ ] Add a `JobRepository` protocol with a single `create_and_enqueue` operation, and implement `PostgresJobRepository` in `app/adapters/` so the job row and the queue entry commit in one transaction. Register it on the adapter factory.
 
 ### 1E. POST /jobs
 
+- [ ] Add `app/api/` with the jobs router and `app/schemas/` with the upload response models.
 - [ ] All files valid: store each file, create and enqueue the job, return `202` with the job ID and status `queued`.
 - [ ] Some files rejected: store valid files, create the job as `awaiting_input` without enqueuing, return `201` with accepted and rejected files.
 - [ ] No valid files: store nothing, return `422` with the per-file error list.
@@ -142,7 +136,7 @@ Solves flow step 1: a client (Bruno) uploads PDFs and gets an immediate job ID.
 
 ### 1H. Learning Checkpoint
 
-- [ ] Learning: explain the code changes in small chunks with file names, short snippets, layman explanations, and how atomic create-and-enqueue keeps jobs from being stranded.
+- [ ] Learning: explain the code changes in small chunks with file names, short snippets, layman explanations, and how atomic create-and-enqueue keeps jobs from being stranded. The domain, adapter, API, and schema packages arrive with this feature.
 
 Suggested commit message: `feat(backend): add job creation with file validation and storage`
 
@@ -154,7 +148,7 @@ Solves flow step 2: a client (Bruno) reads any job's state and resolves rejected
 
 ### 2A. GET /jobs/{id}
 
-- [ ] Add the response schema exactly as in the architecture status flow: status, progress, documents (status, flagged, error, summary), rejected and excluded files, report, error.
+- [ ] Add the `GET /jobs/{id}` response schema in `app/schemas/`, exactly as in the architecture status flow: status, progress, documents (status, flagged, error, summary), rejected and excluded files, report, error.
 - [ ] Return `404` with the error schema for an unknown ID.
 - [ ] Check the generated OpenAPI schema at `/docs` matches the response.
 
@@ -200,13 +194,14 @@ Solves flow step 3: the worker claims the job and moves it through every state.
 
 ### 3B. Worker Process
 
-- [ ] Add a worker entry point in `app/worker/` using the queue library, running from the same image with a different command.
+- [ ] Add `app/worker/` with the worker entry point, using the queue library and the same adapter factory as the API. It runs from the same image with a different command.
 - [ ] Add a `worker` service to `docker-compose.yml` sharing the storage volume and database.
 - [ ] Make every step idempotent: store each step's status, and skip steps already completed on retry.
 
 ### 3C. Pipeline Skeleton
 
-- [ ] Define pipeline steps in `app/pipeline/` as functions with typed inputs and outputs: extract, check, summarise, consolidate.
+- [ ] Add `app/pipeline/` with step functions that have typed inputs and outputs: extract, check, summarise, consolidate.
+- [ ] Add `LLMProvider` and `Classifier` protocols in `app/domain/ports.py`, and mock adapters in `app/adapters/` with deterministic outputs. Register them on the factory.
 - [ ] Wire each step to the mock adapters, with configurable delays so mock mode shows realistic progress.
 - [ ] Update job and document statuses and progress counts as steps complete.
 
@@ -271,7 +266,7 @@ Solves flow step 5: suspicious documents are flagged in the job response.
 - [ ] Implement a `JevClassifier` behind the `Classifier` interface, returning the probability that a chunk contains instructions aimed at the model.
 - [ ] Add a configurable flag threshold; keep the mock classifier as the default.
 - [ ] Use Jev for inferred document type (a choice from a fixed list).
-- [ ] Keep the Jev questions and option descriptions in `prompts.yaml`, not in code.
+- [ ] Add `prompts.yaml` in `app/pipeline/` and a loader that validates every entry (ID, version, template, placeholders) at startup; the path comes from config. Keep the Jev questions and option descriptions in that file, not in code.
 
 ### 5C. Flagging
 
