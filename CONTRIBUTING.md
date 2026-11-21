@@ -67,6 +67,7 @@ Those tests connect with `TEST_POSTGRES_USER`, `TEST_POSTGRES_PASSWORD`, and `TE
   - `gitleaks` scans staged changes for secrets and blocks the commit if any are found. Config: [`.gitleaks.toml`](.gitleaks.toml).
   - `lint-staged` runs Prettier on staged files, and `actionlint` on staged workflow files. Config: `lint-staged` in [`package.json`](package.json).
 - **commit-msg**: `commitlint` enforces [Conventional Commits](https://www.conventionalcommits.org/). Config: `commitlint` in [`package.json`](package.json).
+- **pre-push**: `pnpm test`. Turbo caches each package's test run, so a package with no file changes reuses the last result instead of running again. When the backend cache misses, start `postgres-test` first.
 
 ## Commit messages
 
