@@ -112,7 +112,7 @@ Solves flow step 1: a client (Bruno) uploads PDFs and gets an immediate job ID.
 - [x] Return a typed per-file result with an error code and message for each rejection.
 - [x] Decide `413` versus a per-file `422` for limit errors, and record it in `decision-record.md`.
 
-`validate_files` takes the three limits from config. Each rejected file has one code and the message from the eval set. Too many files rejects the upload with `file_count_exceeded` and does not inspect the files. Limit failures are `422`, recorded on `2026-11-21`. The endpoint that returns that status arrives in 1E.
+`validate_files` runs a list of strategies in order and stops at the first rejection. The default list is `FileValidation` (file count, file size, allowed media types) then `PdfValidation` (`%PDF` header, parse, encryption, JavaScript, embedded files, page limit). A later format is another strategy in that list. Each rejected file has one code and the message from the eval set. Too many files rejects the upload with `file_count_exceeded` and does not inspect the files. Limit failures are `422`, recorded on `2026-11-21`. The endpoint that returns that status arrives in 1E.
 
 ### 1C. MinIO File Storage
 
