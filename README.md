@@ -26,6 +26,12 @@ Docker with Docker Compose, from either of these:
 
 Check with `docker compose version`.
 
+Copy the example environment file. The providers default to mock, so no API key is required:
+
+```bash
+cp .env.example .env
+```
+
 ### Start
 
 ```bash

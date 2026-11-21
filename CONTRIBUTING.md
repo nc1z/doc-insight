@@ -67,7 +67,7 @@ To run the `ci` job locally before pushing, start Docker and run `pnpm ci:local`
 
 - It runs your working copy, including uncommitted changes.
 - The first run downloads a large runner image.
-- The `docker` job does not run reliably under act. Check it with `docker compose up -d --build --wait` instead.
+- The `docker` job does not run reliably under act. Check it with `cp .env.example .env` and then `docker compose up -d --build --wait` instead.
 
 Pull requests remain the final check, because act only approximates GitHub's runners.
 

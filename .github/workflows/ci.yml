@@ -46,6 +46,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - run: cp .env.example .env
+
       - run: docker compose up -d --build --wait
 
       - run: curl --fail http://localhost:8080/api/health
