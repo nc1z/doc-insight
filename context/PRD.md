@@ -12,8 +12,11 @@ The POC is a complete, runnable vertical slice: `docker compose up`, upload PDFs
 flowchart LR
     Select([Analyst selects<br/>one or more PDFs]) --> Check{Files accepted?}
     Check -- "some rejected" --> Rejected[Sees which files were<br/>rejected and why]
-    Check -- "accepted" --> Confirm[Gets immediate<br/>confirmation]
-    Rejected --> Confirm
+    Check -- "all accepted" --> Confirm[Gets immediate<br/>confirmation]
+    Rejected --> Choice{Chooses}
+    Choice -- "re-upload" --> Check
+    Choice -- "continue without them" --> Confirm
+    Choice -- "cancel" --> Abandon([Job abandoned])
     Confirm --> Progress[Watches progress<br/>for each document]
     Progress --> Details[Reads key details for<br/>each document as it finishes]
     Progress -. "if suspicious" .-> Flagged[Sees a warning on<br/>flagged documents]
@@ -36,7 +39,7 @@ Existing summarisers handle one document at a time and don't show which document
 - Produce a consolidated report: overall summary, common themes, differences and contradictions, combined entities, and takeaways.
 - Cite the source document and page number for notable points.
 - Process work asynchronously and show per-document progress until each document is done or has failed.
-- Reject unsupported, invalid, and harmful files with clear errors, without blocking the other files.
+- Reject unsupported, invalid, and harmful files with clear errors, and let the analyst re-upload them, continue without them, or cancel.
 - Detect and flag likely prompt-injection content instead of following it.
 - Run the full stack with one command, including a mock LLM mode that needs no API key.
 - Keep LLM providers, models, queues, and storage swappable through configuration.
@@ -56,6 +59,7 @@ Existing summarisers handle one document at a time and don't show which document
 - **Jobs are not private**: anyone who can reach the backend and knows a job ID can read that job's status and results. This is an accepted risk for the POC.
 - **Job IDs are random and unguessable**, and there is no endpoint that lists jobs. This limits accidental exposure but is not access control.
 - Authentication and per-user job ownership are covered under Production Safety Requirements.
+- **Data and file retention** (lower priority, but must be considered): uploaded files and results are not kept forever. A lifecycle policy deletes them after a set period. If retention is required, they move to cold (frozen) storage after a set period instead of being deleted.
 
 ## POC Users
 
@@ -84,7 +88,8 @@ Existing summarisers handle one document at a time and don't show which document
 - The system shall enforce configurable limits on file size, page count, and file count.
 - The system shall reject encrypted PDFs and PDFs containing JavaScript or embedded files, and shall never execute embedded content.
 - The system shall return a consistent error schema with correct HTTP status codes.
-- The system shall continue processing valid files when others in the same upload are rejected.
+- The system shall not start processing while any file in the upload is rejected, until the analyst re-uploads the rejected files, continues without them, or cancels the job.
+- The system shall list any files the analyst chose to exclude in the consolidated report.
 
 ### Async processing
 
@@ -159,7 +164,7 @@ Existing summarisers handle one document at a time and don't show which document
 - Uploading the samples in `samples/` produces per-document details and a consolidated report in the UI.
 - Upload returns a job ID immediately, and the UI shows live per-document progress until every document ends in done or failed.
 - The adversarial sample is flagged in the UI, and its injected instructions are not followed.
-- Each invalid sample is rejected with a clear error while the valid files in the same upload still complete.
+- Each invalid sample is rejected with a clear error. The analyst can then re-upload it, continue without it (and the report lists it as excluded), or cancel the job.
 - Switching from the mock provider to a hosted provider requires only `.env` changes.
 - CI is green on the latest commit, including tests and mock evals.
 - The README contains an overview, architecture diagram, setup, screenshots, assumptions, and known limitations, plus design decisions on output schema, model choice, chunking, and async processing.
@@ -188,11 +193,9 @@ Existing summarisers handle one document at a time and don't show which document
 
 ## Open Questions
 
-- **Queue baseline**: should the POC use an in-process worker, or a Redis-backed worker container in Compose?
 - **Notification**: polling only, or server-sent events for live progress?
 - **Default hosted model**: which provider and model, balancing cost, latency, multimodal support, and structured-output reliability?
 - **Images**: multimodal LLM for all image pages, or OCR first and multimodal only for charts?
 - **Optional feature**: Q&A over uploaded documents with citations, or cross-document contradiction detection?
-- **Results persistence**: in-memory for the demo, or SQLite so results survive a restart?
 - **Sample topic**: which topic and sources give a meaningful consolidation and include charts and scanned pages?
 - **Ownership**: who maintains the golden set as prompts and models change?
