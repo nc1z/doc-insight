@@ -51,6 +51,16 @@ uv run --directory backend alembic revision -m "describe the change"
 
 Fill in `upgrade()` and `downgrade()` in the new file, then apply it with `alembic upgrade head` as above.
 
+## Backend tests
+
+`uv run --directory backend pytest` includes tests that use the `postgres-test` container. That server is separate from the app database on port 5432. Start it with:
+
+```bash
+docker compose up -d postgres-test --wait
+```
+
+Those tests connect with `TEST_POSTGRES_USER`, `TEST_POSTGRES_PASSWORD`, and `TEST_POSTGRES_DB` from the repo-root `.env`. They create and drop that database on port 5433, apply migrations, and call `/health`. CI starts the same container. The other tests do not connect.
+
 ## Git hooks
 
 - **pre-commit**:

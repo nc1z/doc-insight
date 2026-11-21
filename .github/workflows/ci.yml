@@ -39,6 +39,10 @@ jobs:
 
       - run: pnpm lint
 
+      - run: cp .env.example .env
+
+      - run: docker compose up -d postgres-test --wait
+
       - run: pnpm test
 
   docker:

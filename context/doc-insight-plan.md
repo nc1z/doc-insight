@@ -71,14 +71,18 @@ A healthy database still returns `{ "status": "ok" }`. If the check fails, the r
 
 ### 0C. Errors, Logging, and Request IDs
 
-- [ ] Define one error schema (`code`, `message`, `details`) and the exception handlers that map domain errors to HTTP status codes, both in `app/core/`.
-- [ ] Add structured JSON logging with a request ID middleware; return the ID in an `X-Request-ID` header.
+- [x] Define one error schema (`code`, `message`, `details`) and the exception handlers that map domain errors to HTTP status codes, both in `app/core/`.
+- [x] Add structured JSON logging with a request ID middleware; return the ID in an `X-Request-ID` header.
+
+Errors use one body: `code`, `message`, and `details`. `DomainError` carries the status code. Validation errors, HTTP errors, and unhandled errors use that same body; an unhandled error is logged and the response stays generic. Every response includes `X-Request-ID`. A valid incoming ID is echoed, and any other value is replaced. Request logs are one JSON line and include that ID.
 
 ### 0D. Tests, CI, and Bruno
 
-- [ ] Add a pytest fixture that runs migrations against a test database, and a test for `/health`.
-- [ ] Add a Postgres service container to the CI `ci` job so backend tests run against a real database.
-- [ ] Confirm the CI `docker` job still passes with the new Postgres service.
+- [x] Add a pytest fixture that runs migrations against a test database, and a test for `/health`.
+- [x] Add a Postgres service container to the CI `ci` job so backend tests run against a real database.
+- [x] Confirm the CI `docker` job still passes with the new Postgres service.
+
+The migration fixture uses the `postgres-test` Compose service on port 5433. That service reads `TEST_POSTGRES_USER`, `TEST_POSTGRES_PASSWORD`, and `TEST_POSTGRES_DB`. The fixture creates that database there and runs `alembic upgrade head`. It does not connect to the app database. One test reads `alembic_version`; another calls `/health` against that database. The CI `ci` job starts that same service. `docker compose up` leaves it stopped. The `docker` job is unchanged: it still builds the stack and curls `/api/health`. Bruno's health request also expects `X-Request-ID`.
 
 ### 0E. Learning Checkpoint
 

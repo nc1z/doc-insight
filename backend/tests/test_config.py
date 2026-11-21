@@ -102,7 +102,14 @@ def test_env_example_lists_every_setting() -> None:
     }
 
     settings_names = {name.upper() for name in Settings.model_fields}
-    compose_only = {"POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB"}
+    compose_only = {
+        "POSTGRES_USER",
+        "POSTGRES_PASSWORD",
+        "POSTGRES_DB",
+        "TEST_POSTGRES_USER",
+        "TEST_POSTGRES_PASSWORD",
+        "TEST_POSTGRES_DB",
+    }
 
     assert settings_names <= names
     assert names - settings_names == compose_only

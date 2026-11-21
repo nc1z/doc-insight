@@ -11,14 +11,21 @@ from app.core.config import Settings
 config = context.config
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = None
 
 
+def migration_database_url() -> str:
+    configured = config.get_main_option("sqlalchemy.url")
+    if configured:
+        return configured
+    return Settings().database_url
+
+
 def run_migrations_offline() -> None:
     context.configure(
-        url=Settings().database_url,
+        url=migration_database_url(),
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
@@ -37,7 +44,7 @@ def do_run_migrations(connection: Connection) -> None:
 
 async def run_async_migrations() -> None:
     section = config.get_section(config.config_ini_section, {})
-    section["sqlalchemy.url"] = Settings().database_url
+    section["sqlalchemy.url"] = migration_database_url()
     connectable = async_engine_from_config(
         section,
         prefix="sqlalchemy.",

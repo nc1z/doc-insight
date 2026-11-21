@@ -1,10 +1,12 @@
+import asyncio
 from collections.abc import AsyncIterator
 
 from fastapi.testclient import TestClient
+from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 
 from app.core.config import Settings, get_settings
-from app.core.db import get_session
+from app.core.db import create_engine, get_session
 from app.main import create_app
 
 
@@ -57,6 +59,11 @@ def test_health_reports_database_outage() -> None:
         response = client.get("/health")
 
     assert response.status_code == 503
+    assert response.json() == {
+        "code": "database_unavailable",
+        "message": "The database is unavailable",
+        "details": None,
+    }
 
 
 def test_factory_binds_settings_for_dependencies() -> None:
@@ -70,3 +77,36 @@ def test_factory_binds_settings_for_dependencies() -> None:
 
     assert application.state.settings is settings
     assert application.dependency_overrides[get_settings]() is settings
+
+
+async def _alembic_version(database_url: str) -> str:
+    engine = create_engine(database_url)
+    try:
+        async with engine.connect() as connection:
+            result = await connection.execute(text("SELECT version_num FROM alembic_version"))
+            version = result.scalar_one()
+    finally:
+        await engine.dispose()
+    return str(version)
+
+
+def test_migrations_record_initial_revision(migrated_database_url: str) -> None:
+    assert asyncio.run(_alembic_version(migrated_database_url)) == "0001_initial"
+
+
+def test_health_reads_migrated_database(migrated_database_url: str) -> None:
+    application = create_app(
+        Settings(
+            _env_file=None,
+            database_url=migrated_database_url,
+            llm_provider="mock",
+            classifier_provider="mock",
+        )
+    )
+
+    with TestClient(application) as client:
+        response = client.get("/health")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+    assert response.headers["x-request-id"]

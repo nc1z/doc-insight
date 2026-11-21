@@ -1,14 +1,17 @@
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
 from app.core.db import create_engine, create_session_factory, get_session
+from app.core.errors import DomainError, register_exception_handlers
+from app.core.logging import RequestContextMiddleware, configure_logging
 
 
 @asynccontextmanager
@@ -21,7 +24,10 @@ async def lifespan(application: FastAPI) -> AsyncIterator[None]:
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     resolved = settings if settings is not None else get_settings()
+    configure_logging()
     application = FastAPI(title="Doc Insight API", lifespan=lifespan)
+    register_exception_handlers(application)
+    application.add_middleware(RequestContextMiddleware)
 
     def settings_dependency() -> Settings:
         return resolved
@@ -35,7 +41,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         try:
             await session.execute(text("SELECT 1"))
         except SQLAlchemyError:
-            raise HTTPException(status_code=503) from None
+            logging.getLogger("app.health").exception("database health check failed")
+            raise DomainError(
+                status_code=503,
+                code="database_unavailable",
+                message="The database is unavailable",
+            ) from None
         return {"status": "ok"}
 
     return application
