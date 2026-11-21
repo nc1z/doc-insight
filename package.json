@@ -13,6 +13,7 @@
     "test": "turbo run test",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "ci:local": "DOCKER_HOST=$(docker context inspect --format '{{.Endpoints.docker.Host}}') act -j ci --container-daemon-socket unix:///var/run/docker.sock",
     "prepare": "husky"
   },
   "commitlint": {
@@ -21,7 +22,8 @@
     ]
   },
   "lint-staged": {
-    "*": "prettier --write --ignore-unknown"
+    "*": "prettier --write --ignore-unknown",
+    ".github/workflows/*.{yml,yaml}": "actionlint"
   },
   "prettier": {
     "singleQuote": true,
