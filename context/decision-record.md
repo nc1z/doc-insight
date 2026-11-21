@@ -14,3 +14,7 @@ These are my decision records and thought process throughout planning & developm
 - `2026-11-21 11:18` **Dockerize early**: a working baseline before development starts; `docker compose up -d` runs the full stack with only Docker installed, and CI builds and health-checks both images on every push.
 - `2026-11-21 11:33` **nginx serves the frontend and proxies** `/api` **to the backend**: `vite preview` is not meant for production; the proxy avoids CORS and baking the backend URL into the build. Vite's dev proxy mirrors it, so frontend code always calls `/api`. Assumes no cloud deployment for this task; a static host (Vercel, Netlify, S3 + CloudFront) would replace nginx.
 - `2026-11-21 11:39` **actionlint + act for CI changes**: actionlint catches workflow mistakes in the pre-commit hook and in CI; act runs the `ci` job locally (`pnpm ci:local`) and catches problems actionlint cannot, such as a missing action version.
+
+## Design
+
+- `2026-11-21 12:09` **Initial high-level design directions written before system and solution design** (`context/direction.md`): sets the architectural rules (async, agnostic, modular, design patterns, evals) and frontend conventions up front, so every later design decision and task is checked against them instead of being retrofitted. These are a starting point and will be tweaked as the system and solution design take shape.
