@@ -6,6 +6,7 @@ Development tooling for working on this repo. Not required to run the app (see [
 
 - [nvm](https://github.com/nvm-sh/nvm#installing-and-updating) — installs the Node.js version pinned in [`.nvmrc`](.nvmrc)
 - [pnpm](https://pnpm.io/installation) — install it standalone (macOS: `brew install pnpm`), not through a Node version, so it survives Node upgrades. The exact version is pinned in `packageManager` in [`package.json`](package.json) and pnpm switches to it automatically.
+- [uv](https://docs.astral.sh/uv/getting-started/installation/) — manages Python and the backend's dependencies (macOS: `brew install uv`). Python does not need to be installed separately: uv downloads the version pinned in [`backend/.python-version`](backend/.python-version) automatically.
 - [gitleaks](https://github.com/gitleaks/gitleaks#installing) — only needed to **commit** (the pre-commit hook runs it). Not needed to install or run anything (macOS: `brew install gitleaks`).
 
 ## Setup
@@ -15,6 +16,7 @@ Run from the repo root:
 ```bash
 nvm install    # installs and switches to the version in .nvmrc
 pnpm install   # also installs git hooks via husky
+uv sync --directory backend   # installs Python and the backend's dependencies
 ```
 
 A different Node version only produces a warning, but use the pinned one to match CI and Docker.
@@ -36,9 +38,11 @@ Allowed types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `buil
 
 - `pnpm format` formats the whole repo with Prettier.
 - `pnpm format:check` checks formatting without writing changes (used in CI).
+- Backend Python code uses Ruff: run `uv run ruff format` in `backend/`. `pnpm lint` checks it.
 
 ## Dependency policy
 
 - pnpm only; do not use npm or yarn.
-- `minimumReleaseAge` in [`pnpm-workspace.yaml`](pnpm-workspace.yaml) blocks package versions published less than 7 days ago.
+- uv only for the backend; do not use pip or poetry. Add packages with `uv add` in `backend/`.
+- Both block package versions published less than 7 days ago: `minimumReleaseAge` in [`pnpm-workspace.yaml`](pnpm-workspace.yaml) and `exclude-newer` in [`backend/pyproject.toml`](backend/pyproject.toml).
 - Run `pnpm audit` after dependency changes.

@@ -27,6 +27,8 @@ importers:
         specifier: 2.11.11
         version: 2.11.11
 
+  backend: {}
+
   frontend:
     dependencies:
       react:

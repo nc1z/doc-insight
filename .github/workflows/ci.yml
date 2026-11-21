@@ -25,6 +25,10 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
 
+      - uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+
       - run: pnpm install --frozen-lockfile
 
       - run: pnpm build

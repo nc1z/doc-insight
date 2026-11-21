@@ -1,0 +1,10 @@
+{
+  "name": "backend",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "uv run fastapi dev app/main.py",
+    "lint": "uv run ruff check && uv run ruff format --check",
+    "test": "uv run pytest"
+  }
+}
