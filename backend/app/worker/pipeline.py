@@ -1,5 +1,6 @@
 import asyncio
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Any
 from uuid import UUID
 
@@ -18,6 +19,7 @@ from app.domain.status import DocumentStatus
 from app.pipeline.chunk import chunk_pages
 from app.pipeline.guardrails import ALONE_RULES, GuardrailFinding, scan_pdf
 from app.pipeline.models import DocumentSummary, ExtractedText, ExtractInput, PageText
+from app.pipeline.prompts import SystemPromptCatalog, load_system_prompts
 from app.pipeline.steps import (
     check_document,
     consolidate_summaries,
@@ -49,6 +51,7 @@ class DocumentPipeline:
         delay_seconds: float,
         chunk_token_budget: int,
         flag_threshold: float = 0.7,
+        prompts: SystemPromptCatalog | None = None,
     ) -> None:
         self._jobs = repository
         self._llm = llm
@@ -57,6 +60,9 @@ class DocumentPipeline:
         self._delay = delay_seconds
         self._chunk_token_budget = chunk_token_budget
         self._flag_threshold = flag_threshold
+        self._prompts = prompts or load_system_prompts(
+            Path(__file__).resolve().parents[1] / "pipeline" / "prompts.yaml"
+        )
 
     async def run_step(self, document_id: UUID, status: DocumentStatus) -> None:
         progress = await self._jobs.document_progress(document_id)
@@ -106,6 +112,7 @@ class DocumentPipeline:
             extracted,
             checked,
             self._llm,
+            self._prompts,
             delay_seconds=self._delay if status is DocumentStatus.SUMMARISING else 0,
         )
         await self._jobs.save_summary(document_id, summary.model_dump(mode="json"))
@@ -171,6 +178,7 @@ class DocumentPipeline:
             flagged_documents=flagged,
             excluded_files=excluded,
             llm=self._llm,
+            prompts=self._prompts,
             delay_seconds=self._delay,
         )
         return report.model_dump(mode="json")

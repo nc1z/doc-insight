@@ -2,7 +2,8 @@ import asyncio
 import json
 from collections.abc import Sequence
 
-from app.domain.ports import Classifier, LLMProvider
+from app.domain.ports import Classifier, LLMProvider, LLMRequest
+from app.pipeline.datamark import datamark, datamark_values
 from app.pipeline.extract import extract_pdf_pages
 from app.pipeline.models import (
     CheckResult,
@@ -11,6 +12,7 @@ from app.pipeline.models import (
     ExtractedText,
     ExtractInput,
 )
+from app.pipeline.prompts import SystemPromptCatalog
 
 
 async def extract_text(
@@ -53,24 +55,38 @@ async def check_document(
     )
 
 
+def render_chunk_prompt(
+    prompts: SystemPromptCatalog,
+    *,
+    filename: str,
+    page: int,
+    text: str,
+) -> LLMRequest:
+    return prompts.get("chunk_output").for_call(
+        {"filename": filename, "page": str(page), "chunk_text": datamark(text)}
+    )
+
+
 async def summarise_document(
     document: ExtractInput,
     text: ExtractedText,
     check: CheckResult,
     llm: LLMProvider,
+    prompts: SystemPromptCatalog,
     *,
     delay_seconds: float,
 ) -> DocumentSummary:
     await asyncio.sleep(delay_seconds)
-    body = "\n".join(page.text for page in text.pages)
-    prompt = (
-        "summarise\n"
-        f"filename: {document.filename}\n"
-        f"flagged: {check.flagged}\n"
-        f"document_type: {check.document_type}\n"
-        f"text: {body}"
+    request = prompts.get("document_combine").for_call(
+        {
+            "filename": document.filename,
+            "document_type": check.document_type,
+            "flagged": "true" if check.flagged else "false",
+            "chunk_outputs": "[]",
+            "excerpts": _excerpts(text),
+        }
     )
-    return await llm.complete(prompt, DocumentSummary)
+    return await llm.complete(request, DocumentSummary)
 
 
 async def consolidate_summaries(
@@ -79,13 +95,25 @@ async def consolidate_summaries(
     flagged_documents: list[str],
     excluded_files: list[str],
     llm: LLMProvider,
+    prompts: SystemPromptCatalog,
     delay_seconds: float,
 ) -> ConsolidatedReport:
     await asyncio.sleep(delay_seconds)
-    prompt = (
-        "consolidate\n"
-        f"filenames: {json.dumps([item.title for item in summaries])}\n"
-        f"flagged: {json.dumps(flagged_documents)}\n"
-        f"excluded: {json.dumps(excluded_files)}"
+    marked = [datamark_values(item.model_dump(mode="json")) for item in summaries]
+    request = prompts.get("consolidation").for_call(
+        {
+            "summaries": json.dumps(marked),
+            "flagged": json.dumps(flagged_documents),
+            "excluded": json.dumps(excluded_files),
+        }
     )
-    return await llm.complete(prompt, ConsolidatedReport)
+    return await llm.complete(request, ConsolidatedReport)
+
+
+def _excerpts(text: ExtractedText) -> str:
+    lines: list[str] = []
+    for page in text.pages:
+        marked = datamark(page.text)
+        if marked:
+            lines.append(f"page {page.page}: {marked}")
+    return "\n".join(lines)

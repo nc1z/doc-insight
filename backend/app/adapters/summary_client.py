@@ -8,6 +8,8 @@ from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai_compatible import OpenAICompatibleProvider
 
 from app.core.config import Settings
+from app.domain.ports import LLMRequest
+from app.pipeline.prompts import llm_call_key
 
 SummaryT = TypeVar("SummaryT", bound=BaseModel)
 
@@ -47,7 +49,8 @@ class GatewaySummaryClient:
             output_retries=settings.llm_output_retries,
         )
 
-    async def complete(self, prompt: str, output_type: type[SummaryT]) -> SummaryT:
+    async def complete(self, request: LLMRequest, output_type: type[SummaryT]) -> SummaryT:
+        key = llm_call_key(self._model, request.prompt_id, request.prompt_version)
         agent: Agent[None, SummaryT] = Agent(
             self._chat,
             output_type=PromptedOutput(output_type),
@@ -58,5 +61,13 @@ class GatewaySummaryClient:
                 "max_retries": 0,
             },
         )
-        result = await agent.run(prompt)
+        result = await agent.run(
+            request.user,
+            instructions=request.system,
+            metadata={
+                "prompt_id": request.prompt_id,
+                "prompt_version": request.prompt_version,
+                "cache_key": key,
+            },
+        )
         return result.output

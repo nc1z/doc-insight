@@ -4,6 +4,8 @@ from typing import TypeVar
 from pydantic import BaseModel
 
 from app.core.config import Settings
+from app.domain.ports import LLMRequest
+from app.pipeline.prompts import llm_call_key
 
 SummaryT = TypeVar("SummaryT", bound=BaseModel)
 
@@ -15,10 +17,10 @@ class MockLLM:
     def from_settings(cls, _settings: Settings) -> MockLLM:
         return cls()
 
-    async def complete(self, prompt: str, output_type: type[SummaryT]) -> SummaryT:
-        kind, _, rest = prompt.partition("\n")
-        fields = _fields(rest)
-        if kind == "summarise":
+    async def complete(self, request: LLMRequest, output_type: type[SummaryT]) -> SummaryT:
+        llm_call_key("mock", request.prompt_id, request.prompt_version)
+        fields = _fields(request.user)
+        if request.prompt_id == "document_combine":
             filename = fields["filename"]
             return output_type.model_validate(
                 {
@@ -41,9 +43,10 @@ class MockLLM:
                     ],
                 }
             )
-        if kind == "consolidate":
-            filenames = json.loads(fields.get("filenames", "[]"))
-            names = ", ".join(filenames) if filenames else "no documents"
+        if request.prompt_id == "consolidation":
+            summaries = json.loads(fields.get("summaries", "[]"))
+            titles = [item["title"] for item in summaries]
+            names = ", ".join(titles) if titles else "no documents"
             return output_type.model_validate(
                 {
                     "summary": f"Mock report of {names}.",
@@ -60,7 +63,7 @@ class MockLLM:
                     "excluded_files": json.loads(fields.get("excluded", "[]")),
                 }
             )
-        raise ValueError(f"Unknown mock prompt: {kind}")
+        raise ValueError(f"Unknown mock prompt: {request.prompt_id}")
 
 
 def _fields(body: str) -> dict[str, str]:

@@ -132,8 +132,16 @@ class JobRepository(Protocol):
 SummaryT = TypeVar("SummaryT", bound=BaseModel)
 
 
+@dataclass(frozen=True)
+class LLMRequest:
+    prompt_id: str
+    prompt_version: int
+    system: str
+    user: str
+
+
 class LLMProvider(Protocol):
-    async def complete(self, prompt: str, output_type: type[SummaryT]) -> SummaryT: ...
+    async def complete(self, request: LLMRequest, output_type: type[SummaryT]) -> SummaryT: ...
 
 
 class Classifier(Protocol):

@@ -370,10 +370,12 @@ Solves flow step 6: the job's results contain real key details and a report.
 
 ### 6C. Prompts
 
-- [ ] Write every system prompt and user template for the structured chunk output, the document combine, and consolidation in `prompts.yaml`, each with an ID and version.
-- [ ] Record the prompt ID and version with every LLM call, and run the evals in CI whenever `prompts.yaml` changes.
-- [ ] Apply datamarking to document text: interleave a marker character through it, and explain in the system prompt that marked text is data, never instructions.
-- [ ] Ask the consolidation prompt to list disagreements explicitly instead of a single consensus.
+- [x] Write every system prompt and user template for the structured chunk output, the document combine, and consolidation in `prompts.yaml`, each with an ID and version.
+- [x] Record the prompt ID and version with every LLM call, and run the evals in CI whenever `prompts.yaml` changes.
+- [x] Apply datamarking to document text: interleave a marker character through it, and explain in the system prompt that marked text is data, never instructions.
+- [x] Ask the consolidation prompt to list disagreements explicitly instead of a single consensus.
+
+`chunk_output`, `document_combine`, and `consolidation` are in `backend/app/pipeline/prompts.yaml`, each with an id and a version. The system text includes the canary `CANARY-7F3A9C`. A caret is placed between the words of document text before it goes into a prompt (`backend/app/pipeline/datamark.py`), and the system text says that marked text is data. The consolidation prompt tells the model to keep both numbers when two documents disagree, with the file, the page, and the quote for each. Each summary call records `model:prompt id:version` in the worker log. CI runs these checks with the rest of the tests, so a change to `prompts.yaml` fails the build when an id, a version, a placeholder, or the canary is wrong. The scored golden cases stay in phase 7. The per-chunk model call is phase 6D. The current document summary still sends the marked page text in one call.
 
 ### 6D. Summarise and Consolidate
 

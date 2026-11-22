@@ -15,7 +15,7 @@ from app.worker.tasks import bind_jobs, bind_step_timeout
 def main() -> None:
     configure_logging()
     settings = get_settings()
-    load_system_prompts(settings.system_prompts_path)
+    catalog = load_system_prompts(settings.system_prompts_path)
     engine = create_engine(settings.database_url)
     queue = build_queue(settings.database_url, maintenance_cron=settings.maintenance_cron)
     repository = PostgresJobRepository(create_session_factory(engine), queue)
@@ -31,6 +31,7 @@ def main() -> None:
             delay_seconds=delay,
             chunk_token_budget=settings.chunk_token_budget,
             flag_threshold=settings.classifier_flag_threshold,
+            prompts=catalog,
         )
     )
     try:

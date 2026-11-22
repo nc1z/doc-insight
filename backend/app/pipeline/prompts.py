@@ -1,13 +1,20 @@
+import logging
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import yaml
 
+from app.domain.ports import LLMRequest
+from app.pipeline.datamark import MARKER
+
 _PLACEHOLDER = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}")
 _REQUIRED = ("injection", "document_type")
+_GENERATION = ("chunk_output", "document_combine", "consolidation")
 _QUESTION_TYPES = {"noul", "choice"}
+CANARY = "CANARY-7F3A9C"
 
 
 @dataclass(frozen=True)
@@ -19,11 +26,30 @@ class Prompt:
     question_type: str | None = None
     instructions: str | None = None
     criteria: dict[str, str] | None = None
+    system: str | None = None
 
-    def render(self, text: str) -> str:
-        if len(self.placeholders) != 1:
-            raise ValueError(f"System prompt {self.id} needs one placeholder")
-        return self.template.format(**{self.placeholders[0]: text})
+    def render(self, values: str | Mapping[str, str]) -> str:
+        if isinstance(values, str):
+            if len(self.placeholders) != 1:
+                raise ValueError(f"System prompt {self.id} needs one placeholder")
+            values = {self.placeholders[0]: values}
+        missing = [name for name in self.placeholders if name not in values]
+        if missing:
+            raise ValueError(f"System prompt {self.id} is missing {', '.join(missing)}")
+        rendered = self.template
+        for name in sorted(self.placeholders, key=len, reverse=True):
+            rendered = rendered.replace("{" + name + "}", values[name])
+        return rendered
+
+    def for_call(self, values: Mapping[str, str]) -> LLMRequest:
+        if self.system is None:
+            raise ValueError(f"System prompt {self.id} has no system text")
+        return LLMRequest(
+            prompt_id=self.id,
+            prompt_version=self.version,
+            system=self.system,
+            user=self.render(values),
+        )
 
     def api_question(self) -> dict[str, Any]:
         if self.question_type is None or self.instructions is None:
@@ -57,13 +83,23 @@ def load_system_prompts(path: Path) -> SystemPromptCatalog:
         if prompt.id in prompts:
             raise ValueError(f"{path}: duplicate system prompt id {prompt.id}")
         prompts[prompt.id] = prompt
-    missing = [prompt_id for prompt_id in _REQUIRED if prompt_id not in prompts]
+    missing = [prompt_id for prompt_id in (*_REQUIRED, *_GENERATION) if prompt_id not in prompts]
     if missing:
         raise ValueError(f"{path}: missing system prompts: {', '.join(missing)}")
     for prompt_id in _REQUIRED:
         if prompts[prompt_id].question_type is None:
             raise ValueError(f"{path}: system prompt {prompt_id} has no question")
+    for prompt_id in _GENERATION:
+        system = prompts[prompt_id].system
+        if system is None or CANARY not in system or MARKER not in system:
+            raise ValueError(f"{path}: system prompt {prompt_id} needs system text")
     return SystemPromptCatalog(prompts)
+
+
+def llm_call_key(model: str, prompt_id: str, prompt_version: int) -> str:
+    key = f"{model}:{prompt_id}:v{prompt_version}"
+    logging.getLogger("app.llm").info("llm call %s", key)
+    return key
 
 
 def _prompt(path: Path, entry: object) -> Prompt:
@@ -84,7 +120,16 @@ def _prompt(path: Path, entry: object) -> Prompt:
         question_type=question_type,
         instructions=instructions,
         criteria=criteria,
+        system=_system(path, prompt_id, entry.get("system")),
     )
+
+
+def _system(path: Path, prompt_id: str, system: object) -> str | None:
+    if system is None:
+        return None
+    if not isinstance(system, str) or not system.strip():
+        raise ValueError(f"{path}: system prompt {prompt_id} needs system text")
+    return system.strip()
 
 
 def _text(path: Path, entry: dict[str, Any], field: str) -> str:
