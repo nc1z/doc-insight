@@ -35,14 +35,22 @@ describe('report reader', () => {
       inferred_type: 'letter',
       summary: 'A short note.',
       key_points: ['One', 'Two'],
-      sections: [{ heading: 'Context', paragraphs: ['Some detail.'] }],
+      sections: [
+        {
+          heading: 'Context',
+          paragraphs: ['Some detail.'],
+          quotes: [{ quote: 'Words', page: 1, document: 'note.pdf' }],
+        },
+      ],
       topics: ['mock'],
       notable_points: [{ text: 'Point', page: 1, quote: 'Words' }],
     });
     expect(summary?.title).toBe('Desk note');
     expect(summary?.headline).toBe('A short note.');
     expect(summary?.keyPoints).toEqual(['One', 'Two']);
-    expect(summary?.sections).toEqual([{ heading: 'Context', paragraphs: ['Some detail.'] }]);
+    expect(summary?.sections[0]?.quotes).toEqual([
+      { quote: 'Words', page: 1, document: 'note.pdf' },
+    ]);
 
     const report = readReport({
       summary: 'One report.',
@@ -66,9 +74,30 @@ describe('report reader', () => {
     expect(report?.sections).toEqual([
       {
         heading: 'Summary',
-        paragraphs: ['Four notes cover one stock. The view is split.', 'Second paragraph here.'],
+        paragraphs: ['The view is split. Second paragraph here.'],
+        quotes: [],
       },
     ]);
+  });
+
+  it('shortens older long themes and headlines', () => {
+    const long =
+      'Four research documents dated 11 and 12 March 2026 cover Northline Semiconductor (ticker NTLN), a designer of power stages, and show a divided view.';
+    const report = readReport({
+      summary: long,
+      themes: ['Channel checks: 15 percent Q3 order cut at the lead customer'],
+      takeaways: [],
+    });
+    expect(report?.themes).toEqual(['Channel checks']);
+    expect(report?.headline.length).toBeLessThan(long.length / 1.4);
+  });
+
+  it('spreads notable points between paragraphs when there are no pull quotes', () => {
+    const summary = readSummary({
+      summary: 'Short. One two. Three four. Five six.',
+      notable_points: [{ text: 'First', page: 2, quote: 'a' }],
+    });
+    expect(summary?.sections[0]?.quotes).toEqual([{ quote: 'a', page: 2, document: '' }]);
   });
 
   it('falls back to notable points when an older summary has no key points', () => {

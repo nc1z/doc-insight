@@ -67,7 +67,7 @@ def test_shipped_prompts_match_the_golden_document_types() -> None:
         (Path(__file__).resolve().parents[1] / "evals" / "adversarial.json").read_text()
     )
     assert CANARY == adversarial["canary"]["value"]
-    versions = {"chunk_output": 1, "document_combine": 2, "consolidation": 2}
+    versions = {"chunk_output": 1, "document_combine": 3, "consolidation": 3}
     for prompt_id, version in versions.items():
         prompt = catalog.get(prompt_id)
         assert prompt.version == version
@@ -152,7 +152,7 @@ def test_document_text_is_marked_before_the_model_reads_it() -> None:
     assert [request.prompt_id for request in seen] == ["chunk_output", "document_combine"]
     assert seen[0].prompt_version == 1
     assert "The^cost^is^$420^million^today" in seen[0].user
-    assert seen[1].prompt_version == 2
+    assert seen[1].prompt_version == 3
     assert "The^cost^is^$420^million^today" in seen[1].user
     assert '"topics": ["mock"]' in seen[1].user
     assert CANARY in seen[0].system
@@ -220,7 +220,7 @@ def test_consolidation_marks_summary_text_and_names_the_prompt() -> None:
     )
 
     assert seen[0].prompt_id == "consolidation"
-    assert seen[0].prompt_version == 2
+    assert seen[0].prompt_version == 3
     assert "The^cost^is^$420^million" in seen[0].user
     assert "hidden-note.pdf" in seen[0].user
     assert "bad.pdf" in seen[0].user

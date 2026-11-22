@@ -11,9 +11,11 @@ from app.pipeline.models import (
     ExtractInput,
     PageChunk,
     PageText,
+    PullQuote,
+    Section,
 )
 from app.pipeline.prompts import SystemPromptCatalog, load_system_prompts
-from app.pipeline.steps import summarise_document
+from app.pipeline.steps import _verified_for_report, _verified_section, summarise_document
 
 _CHECK = CheckResult(flagged=False, label="benign", score=0.1, document_type="letter")
 
@@ -69,6 +71,58 @@ def test_mock_output_drops_a_quote_from_the_wrong_page() -> None:
     assert summary.summary == "Mock summary of desk-note.pdf."
     assert summary.notable_points == []
     assert '"notable_points": []' in seen[0]
+
+
+def test_section_keeps_only_pull_quotes_found_on_their_page() -> None:
+    section = Section(
+        heading="Cost",
+        paragraphs=["The cost is high."],
+        quotes=[
+            PullQuote(quote="The cost is $420 million", page=1),
+            PullQuote(quote="The cost is $420 million", page=2),
+        ],
+    )
+    invented = Section(
+        heading="Cost",
+        paragraphs=["The cost is high."],
+        quotes=[PullQuote(quote="Invented words", page=1)],
+    )
+    page = [PageText(page=1, text="The cost is $420 million today")]
+    assert _verified_section(invented, page, "desk-note.pdf").quotes == []
+
+    kept = _verified_section(
+        section, [PageText(page=1, text="The cost is $420\nmillion today")], "desk-note.pdf"
+    )
+
+    assert [(q.quote, q.page, q.document) for q in kept.quotes] == [
+        ("The cost is $420 million", 1, "desk-note.pdf")
+    ]
+
+
+def test_report_section_keeps_only_quotes_a_document_summary_holds() -> None:
+    mock = asyncio.run(
+        summarise_document(
+            ExtractInput(filename="a.pdf", page_count=1),
+            ExtractedText(pages=[PageText(page=1, text="a.pdf page 1")]),
+            _CHECK,
+            MockLLM(),
+            _prompts(),
+            [PageChunk(page=1, text="a.pdf page 1", token_count=4)],
+            delay_seconds=0,
+        )
+    )[0]
+    section = Section(
+        heading="Cost",
+        paragraphs=["The cost is high."],
+        quotes=[
+            PullQuote(quote="a.pdf ^ page 1", page=1, document="a.pdf"),
+            PullQuote(quote="Invented words", page=1, document="a.pdf"),
+        ],
+    )
+
+    kept = _verified_for_report(section, [mock])
+
+    assert [q.quote for q in kept.quotes] == ["a.pdf page 1"]
 
 
 def _prompts() -> SystemPromptCatalog:

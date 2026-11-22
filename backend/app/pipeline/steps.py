@@ -13,7 +13,10 @@ from app.pipeline.models import (
     DocumentSummary,
     ExtractedText,
     ExtractInput,
+    NotablePoint,
     PageChunk,
+    PageText,
+    Section,
 )
 from app.pipeline.prompts import SystemPromptCatalog
 
@@ -95,8 +98,15 @@ async def summarise_document(
     )
     result = await llm.complete(request, DocumentSummary)
     calls.append(result.call)
-    summary = result.output.model_copy(
-        update={"notable_points": supported_points(result.output.notable_points, text.pages)}
+    output = result.output
+    summary = output.model_copy(
+        update={
+            "notable_points": supported_points(output.notable_points, text.pages),
+            "sections": [
+                _verified_section(section, text.pages, document.filename)
+                for section in output.sections
+            ],
+        }
     )
     return summary, calls
 
@@ -152,7 +162,45 @@ async def consolidate_summaries(
         }
     )
     result = await llm.complete(request, ConsolidatedReport)
-    return result.output, [result.call]
+    report = result.output.model_copy(
+        update={
+            "sections": [
+                _verified_for_report(section, summaries) for section in result.output.sections
+            ]
+        }
+    )
+    return report, [result.call]
+
+
+def _verified_section(section: Section, pages: Sequence[PageText], filename: str) -> Section:
+    """Keep only pull quotes that appear on the page they cite."""
+    quotes = [
+        quote.model_copy(update={"quote": _plain(quote.quote), "document": filename})
+        for quote in section.quotes
+    ]
+    points = [NotablePoint(text=q.quote, page=q.page, quote=q.quote) for q in quotes]
+    kept = {(point.page, point.quote) for point in supported_points(points, pages)}
+    return section.model_copy(update={"quotes": [q for q in quotes if (q.page, q.quote) in kept]})
+
+
+def _verified_for_report(section: Section, summaries: Sequence[DocumentSummary]) -> Section:
+    """Keep only pull quotes that a document summary already holds as a verified quote."""
+    known = {
+        (point.page, _plain(point.quote))
+        for summary in summaries
+        for point in summary.notable_points
+    }
+    quotes = [
+        quote.model_copy(update={"quote": _plain(quote.quote)})
+        for quote in section.quotes
+        if (quote.page, _plain(quote.quote)) in known
+    ]
+    return section.model_copy(update={"quotes": quotes})
+
+
+def _plain(value: str) -> str:
+    """Collapse whitespace and drop the ^ marks that datamarking puts between words."""
+    return " ".join(word for word in value.split() if word != "^")
 
 
 def _excerpts(text: ExtractedText, chunks: Sequence[PageChunk]) -> str:

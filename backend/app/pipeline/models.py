@@ -18,9 +18,11 @@ DocumentType = Literal[
 _Text = Annotated[str, Field(min_length=1)]
 # One line a reader can take in at a glance. The cap is a guard, not a target: the prompts
 # ask for far fewer words, and a longer answer is sent back to the model to shorten.
-_OneLiner = Annotated[str, Field(min_length=1, max_length=200)]
-_Heading = Annotated[str, Field(min_length=1, max_length=80)]
-_Tag = Annotated[str, Field(min_length=1, max_length=40)]
+_Headline = Annotated[str, Field(min_length=1, max_length=130)]
+_OneLiner = Annotated[str, Field(min_length=1, max_length=150)]
+_Heading = Annotated[str, Field(min_length=1, max_length=60)]
+_Tag = Annotated[str, Field(min_length=1, max_length=28)]
+_Paragraph = Annotated[str, Field(min_length=1, max_length=320)]
 
 
 class PageText(BaseModel):
@@ -76,18 +78,27 @@ class ChunkSummary(BaseModel):
     notable_points: list[NotablePoint]
 
 
+class PullQuote(BaseModel):
+    """A line copied from a document, shown between paragraphs."""
+
+    quote: _Text
+    page: int = Field(ge=1)
+    document: str = ""
+
+
 class Section(BaseModel):
-    """One topic to read about: a short heading and a few short paragraphs."""
+    """One topic to read about: a short heading, short paragraphs, and optional quotes."""
 
     heading: _Heading
-    paragraphs: list[_Text] = Field(min_length=1, max_length=3)
+    paragraphs: list[_Paragraph] = Field(min_length=1, max_length=4)
+    quotes: list[PullQuote] = Field(default_factory=list, max_length=2)
 
 
 class DocumentSummary(BaseModel):
-    title: _Heading = Field(description="The document's name in at most eight words.")
+    title: _Heading = Field(description="The document's name in at most six words.")
     inferred_type: DocumentType
-    summary: _OneLiner = Field(
-        description="One sentence of at most 20 words: the single most important idea."
+    summary: _Headline = Field(
+        description="One sentence of at most 12 words: the single most important idea."
     )
     key_points: list[_OneLiner] = Field(
         min_length=1,
@@ -99,7 +110,7 @@ class DocumentSummary(BaseModel):
         max_length=3,
         description="What to read after the key points: detail and context, not a repeat.",
     )
-    topics: list[_Tag] = Field(max_length=6, description="Short tags of one to three words.")
+    topics: list[_Tag] = Field(max_length=6, description="Short tags of one or two words.")
     entities: Entities = Field(default_factory=Entities)
     notable_points: list[NotablePoint]
 
@@ -117,10 +128,10 @@ class Contradiction(BaseModel):
 
 
 class ConsolidatedReport(BaseModel):
-    summary: _OneLiner = Field(
-        description="One sentence of at most 20 words: the most important idea across the documents."
+    summary: _Headline = Field(
+        description="One sentence of at most 12 words: the most important idea across the documents."
     )
-    themes: list[_Tag] = Field(max_length=6, description="Short tags of one to three words.")
+    themes: list[_Tag] = Field(max_length=6, description="Short tags of one or two words.")
     contradictions: list[Contradiction] = Field(default_factory=list)
     entities: Entities = Field(default_factory=Entities)
     takeaways: list[_OneLiner] = Field(

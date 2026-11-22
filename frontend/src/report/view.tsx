@@ -8,7 +8,7 @@ import {
   readSummary,
   type Contradiction,
   type Entities,
-  type NotablePoint,
+  type PullQuote,
   type Section as ReadingSection,
 } from '@/report/read';
 
@@ -18,8 +18,6 @@ const ENTITY_LABEL: { key: keyof Entities; label: string }[] = [
   { key: 'locations', label: 'Locations' },
   { key: 'dates', label: 'Dates' },
 ];
-
-const MAX_QUOTES = 4;
 
 function typeLabel(value: string): string {
   if (!value) {
@@ -75,19 +73,35 @@ function KeyPoints({ points }: { points: string[] }) {
   );
 }
 
+// Quotes sit between paragraphs, spread evenly, so a section reads like an article.
+function interleave(section: ReadingSection): ReactNode[] {
+  const { paragraphs, quotes } = section;
+  const after = new Map<number, PullQuote[]>();
+  quotes.forEach((quote, index) => {
+    const at = Math.max(0, Math.floor(((index + 1) * paragraphs.length) / (quotes.length + 1)) - 1);
+    after.set(at, [...(after.get(at) ?? []), quote]);
+  });
+  return paragraphs.flatMap((paragraph, index) => [
+    <p key={`p:${paragraph}`} className="max-w-[68ch] text-base leading-7 text-foreground/85">
+      {paragraph}
+    </p>,
+    ...(after.get(index) ?? []).map((quote) => (
+      <Quote
+        key={`q:${quote.page}:${quote.quote}`}
+        quote={quote.quote}
+        source={quote.document ? `${quote.document} · p. ${quote.page}` : `p. ${quote.page}`}
+      />
+    )),
+  ]);
+}
+
 function Reading({ sections }: { sections: ReadingSection[] }) {
   return (
-    <div className="space-y-9">
+    <div className="space-y-10">
       {sections.map((section) => (
-        <article key={section.heading} className="space-y-3">
+        <article key={section.heading} className="space-y-5">
           <h4 className="text-lg font-semibold tracking-tight">{section.heading}</h4>
-          <div className="max-w-[68ch] space-y-4">
-            {section.paragraphs.map((paragraph) => (
-              <p key={paragraph} className="text-base leading-7 text-foreground/85">
-                {paragraph}
-              </p>
-            ))}
-          </div>
+          <div className="space-y-5">{interleave(section)}</div>
         </article>
       ))}
     </div>
@@ -118,20 +132,6 @@ function Disagreements({ items }: { items: Contradiction[] }) {
             </div>
           ))}
         </article>
-      ))}
-    </div>
-  );
-}
-
-function Quotes({ points }: { points: NotablePoint[] }) {
-  return (
-    <div className="space-y-5">
-      {points.slice(0, MAX_QUOTES).map((point) => (
-        <Quote
-          key={`${point.page}:${point.quote}`}
-          quote={point.quote}
-          source={`p. ${point.page}`}
-        />
       ))}
     </div>
   );
@@ -263,10 +263,9 @@ export function ReportView({ job }: { job: JobView }) {
                   </Headline>
                   <KeyPoints points={summary.keyPoints.slice(0, 3)} />
                 </Slide>
-                {(summary.sections.length > 0 || summary.notablePoints.length > 0) && (
+                {summary.sections.length > 0 && (
                   <Slide label="Reading">
-                    {summary.sections.length > 0 && <Reading sections={summary.sections} />}
-                    {summary.notablePoints.length > 0 && <Quotes points={summary.notablePoints} />}
+                    <Reading sections={summary.sections} />
                   </Slide>
                 )}
                 {summary.topics.length > 0 && (
