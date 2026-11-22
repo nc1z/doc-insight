@@ -25,7 +25,7 @@ def test_happy_path_has_four_documents_of_varying_length(flows: Path) -> None:
 
     assert counts == {
         "nvidia-stability-outlook.pdf": 3,
-        "anthropic-ipo-watch.pdf": 2,
+        "anthropic-ipo-debrief.pdf": 2,
         "ai-competitor-landscape.pdf": 3,
         "market-wrap.pdf": 1,
     }
@@ -36,8 +36,9 @@ def test_the_crucial_shares_are_only_in_the_image(flows: Path) -> None:
 
     assert [page.needs_image for page in pages] == [False, False, True]
     text = " ".join(page.text for page in pages)
-    assert "38" not in text
+    assert "55" not in text
     assert "31 percent" not in text
+    assert "55 percent" not in text
 
 
 def test_failure_path_has_one_file_that_cannot_be_read(flows: Path) -> None:
