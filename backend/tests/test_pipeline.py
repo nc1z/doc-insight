@@ -106,6 +106,7 @@ def test_factory_selects_the_gateway_summary_client() -> None:
     hosted = Settings(
         _env_file=None,
         llm_provider="cloudflare",
+        llm_base_url="https://llm.example",
         llm_api_key="test-key",
         cloudflare_account_id="acct",
         classifier_provider="jev",
@@ -114,7 +115,7 @@ def test_factory_selects_the_gateway_summary_client() -> None:
 
     summary = build_llm(hosted)
     assert isinstance(summary, GatewaySummaryClient)
-    assert summary._base_url == "https://api.cloudflare.com/client/v4/accounts/acct/ai/v1"
+    assert summary._base_url == "https://llm.example/accounts/acct/ai/v1"
     assert isinstance(build_classifier(hosted), DecisionModelClassifier)
 
 
@@ -209,12 +210,19 @@ async def _stores_results(database_url: str) -> None:
             pages = await repository.list_pages(document_id)
             await repository.replace_pages(document_id, pages)
             body = client.get(f"/jobs/{job_id}").json()
+            usage = client.get("/admin/usage", params={"job_id": str(job_id)}).json()
+            missing = client.get(
+                "/admin/usage",
+                params={"job_id": "00000000-0000-0000-0000-000000000000"},
+            )
         assert body["status"] == "succeeded"
         assert body["progress"] == {"completed_steps": 3, "total_steps": 3}
         assert body["documents"][0]["flagged"] is False
         assert body["documents"][0]["summary"]["title"] == "desk-note.pdf"
         assert body["documents"][0]["summary"]["summary"] == "Mock summary of desk-note.pdf."
         assert body["documents"][0]["summary"]["inferred_type"] == "other"
+        assert body["documents"][0]["summary"]["notable_points"] == []
+        assert "usage" not in body
         assert body["report"]["summary"] == "Mock report of desk-note.pdf."
         assert body["report"]["excluded_files"] == []
         assert [(page.page_number, page.text, page.needs_image) for page in pages] == [
@@ -222,6 +230,21 @@ async def _stores_results(database_url: str) -> None:
         ]
         assert len(await repository.list_pages(document_id)) == 1
         assert await repository.list_chunks(document_id) == []
+        assert [call["prompt_id"] for call in usage["calls"]] == [
+            "document_combine",
+            "consolidation",
+        ]
+        assert usage["calls"][0]["document_id"] == str(document_id)
+        assert usage["calls"][1]["document_id"] is None
+        assert usage["calls"][0]["model"] == "mock"
+        assert usage["totals"] == {
+            "calls": 2,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "latency_ms": sum(call["latency_ms"] for call in usage["calls"]),
+        }
+        assert missing.status_code == 404
+        assert missing.json()["code"] == "not_found"
     finally:
         bind_pipeline(None)
         await _clear(engine)

@@ -12,14 +12,16 @@ from sqlalchemy.orm import selectinload
 from app.adapters.queue import CONSOLIDATE_JOB, PROCESS_DOCUMENT
 from app.core.errors import DomainError
 from app.domain.job_state import transition
-from app.domain.models import Chunk, Document, GuardrailResult, Job, Page
+from app.domain.models import Chunk, Document, GuardrailResult, Job, LlmCall, Page
 from app.domain.ports import (
     DocumentProgress,
+    LLMCall,
     NewDocument,
     NewRejection,
     StoredChunk,
     StoredGuardrail,
     StoredPage,
+    StoredUsage,
 )
 from app.domain.status import DocumentStatus, JobStatus
 
@@ -204,6 +206,7 @@ class PostgresJobRepository:
                 filename=document.filename,
                 page_count=document.page_count,
                 storage_key=document.storage_key,
+                job_id=document.job_id,
             )
 
     async def complete_step(
@@ -351,6 +354,50 @@ class PostgresJobRepository:
                     position=row.position,
                     text=row.text,
                     token_count=row.token_count,
+                )
+                for row in rows
+            ]
+
+    async def save_llm_calls(
+        self,
+        job_id: UUID,
+        document_id: UUID | None,
+        calls: Sequence[LLMCall],
+    ) -> None:
+        if not calls:
+            return
+        async with self._sessions() as session, session.begin():
+            session.add_all(
+                LlmCall(
+                    job_id=job_id,
+                    document_id=document_id,
+                    model=call.model,
+                    prompt_id=call.prompt_id,
+                    prompt_version=call.prompt_version,
+                    input_tokens=call.input_tokens,
+                    output_tokens=call.output_tokens,
+                    latency_ms=call.latency_ms,
+                    position=position,
+                )
+                for position, call in enumerate(calls)
+            )
+
+    async def list_llm_calls(self, job_id: UUID | None = None) -> Sequence[StoredUsage]:
+        async with self._sessions() as session:
+            statement = select(LlmCall).order_by(LlmCall.created_at, LlmCall.position)
+            if job_id is not None:
+                statement = statement.where(LlmCall.job_id == job_id)
+            rows = await session.scalars(statement)
+            return [
+                StoredUsage(
+                    job_id=row.job_id,
+                    document_id=row.document_id,
+                    model=row.model,
+                    prompt_id=row.prompt_id,
+                    prompt_version=row.prompt_version,
+                    input_tokens=row.input_tokens,
+                    output_tokens=row.output_tokens,
+                    latency_ms=row.latency_ms,
                 )
                 for row in rows
             ]

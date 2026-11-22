@@ -124,6 +124,30 @@ class Chunk(Base):
     document: Mapped[Document] = relationship(back_populates="chunks")
 
 
+class LlmCall(Base):
+    __tablename__ = "llm_calls"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid4)
+    job_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("jobs.id", ondelete="CASCADE"),
+        index=True,
+    )
+    document_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE"),
+    )
+    model: Mapped[str] = mapped_column(String(128))
+    prompt_id: Mapped[str] = mapped_column(String(64))
+    prompt_version: Mapped[int]
+    input_tokens: Mapped[int]
+    output_tokens: Mapped[int]
+    latency_ms: Mapped[int]
+    position: Mapped[int]
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+    )
+
+
 class GuardrailResult(Base):
     __tablename__ = "guardrail_results"
 

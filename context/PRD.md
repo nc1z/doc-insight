@@ -157,7 +157,7 @@ Existing summarisers handle one document at a time and don't show which document
 - Each uploaded file has a progress row that moves through queued, extracting, analysing, validating, and done or failed.
 - A counter shows documents completed out of total, plus elapsed time.
 - Safety flags appear inline on the affected document as soon as they are detected.
-- On completion, the view shows tokens used and time taken per job.
+- On completion, the analyst view shows the results. Tokens used and time taken stay on an admin view.
 - In mock mode, progress events are emitted with realistic delays, so the demo shows the async flow without an API key.
 
 ## POC Acceptance Criteria

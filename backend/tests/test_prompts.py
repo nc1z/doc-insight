@@ -7,7 +7,7 @@ from pydantic import ValidationError
 
 from app.adapters.mocks.mock_llm import MockLLM
 from app.core.config import Settings
-from app.domain.ports import LLMRequest
+from app.domain.ports import LLMCall, LLMRequest, LLMResult
 from app.main import create_app
 from app.pipeline.models import (
     CheckResult,
@@ -135,7 +135,7 @@ def test_document_text_is_marked_before_the_model_reads_it() -> None:
             seen.append(request)
             return await self._mock.complete(request, output_type)
 
-    summary = asyncio.run(
+    summary, _calls = asyncio.run(
         summarise_document(
             ExtractInput(filename="desk-note.pdf", page_count=1),
             ExtractedText(pages=[PageText(page=1, text="The cost is $420 million today")]),
@@ -167,17 +167,27 @@ def test_consolidation_marks_summary_text_and_names_the_prompt() -> None:
             self,
             request: LLMRequest,
             output_type: type[object],
-        ) -> object:
+        ) -> LLMResult[object]:
             seen.append(request)
-            return output_type.model_validate(
-                {
-                    "summary": "Mock report of desk-note.pdf.",
-                    "themes": ["mock"],
-                    "contradictions": [],
-                    "takeaways": ["Mock takeaway"],
-                    "flagged_documents": [],
-                    "excluded_files": [],
-                }
+            return LLMResult(
+                output=output_type.model_validate(
+                    {
+                        "summary": "Mock report of desk-note.pdf.",
+                        "themes": ["mock"],
+                        "contradictions": [],
+                        "takeaways": ["Mock takeaway"],
+                        "flagged_documents": [],
+                        "excluded_files": [],
+                    }
+                ),
+                call=LLMCall(
+                    model="mock",
+                    prompt_id=request.prompt_id,
+                    prompt_version=request.prompt_version,
+                    input_tokens=0,
+                    output_tokens=0,
+                    latency_ms=0,
+                ),
             )
 
     asyncio.run(

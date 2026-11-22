@@ -1,10 +1,11 @@
 import json
+import time
 from typing import TypeVar
 
 from pydantic import BaseModel
 
 from app.core.config import Settings
-from app.domain.ports import LLMRequest
+from app.domain.ports import LLMCall, LLMRequest, LLMResult
 from app.pipeline.prompts import llm_call_key
 
 SummaryT = TypeVar("SummaryT", bound=BaseModel)
@@ -17,13 +18,17 @@ class MockLLM:
     def from_settings(cls, _settings: Settings) -> MockLLM:
         return cls()
 
-    async def complete(self, request: LLMRequest, output_type: type[SummaryT]) -> SummaryT:
+    async def complete(
+        self, request: LLMRequest, output_type: type[SummaryT]
+    ) -> LLMResult[SummaryT]:
+        started = time.perf_counter()
         llm_call_key("mock", request.prompt_id, request.prompt_version)
         fields = _fields(request.user)
+        output: SummaryT
         if request.prompt_id == "chunk_output":
             filename = fields["filename"]
             page = int(fields.get("page", "1"))
-            return output_type.model_validate(
+            output = output_type.model_validate(
                 {
                     "topics": ["mock"],
                     "entities": {
@@ -41,9 +46,9 @@ class MockLLM:
                     ],
                 }
             )
-        if request.prompt_id == "document_combine":
+        elif request.prompt_id == "document_combine":
             filename = fields["filename"]
-            return output_type.model_validate(
+            output = output_type.model_validate(
                 {
                     "title": filename,
                     "inferred_type": fields.get("document_type", "other"),
@@ -64,11 +69,11 @@ class MockLLM:
                     ],
                 }
             )
-        if request.prompt_id == "consolidation":
+        elif request.prompt_id == "consolidation":
             summaries = json.loads(fields.get("summaries", "[]"))
             titles = [item["title"] for item in summaries]
             names = ", ".join(titles) if titles else "no documents"
-            return output_type.model_validate(
+            output = output_type.model_validate(
                 {
                     "summary": f"Mock report of {names}.",
                     "themes": ["mock"],
@@ -84,7 +89,20 @@ class MockLLM:
                     "excluded_files": json.loads(fields.get("excluded", "[]")),
                 }
             )
-        raise ValueError(f"Unknown mock prompt: {request.prompt_id}")
+        else:
+            raise ValueError(f"Unknown mock prompt: {request.prompt_id}")
+        return LLMResult(output=output, call=_call(request, started))
+
+
+def _call(request: LLMRequest, started: float) -> LLMCall:
+    return LLMCall(
+        model="mock",
+        prompt_id=request.prompt_id,
+        prompt_version=request.prompt_version,
+        input_tokens=0,
+        output_tokens=0,
+        latency_ms=int((time.perf_counter() - started) * 1000),
+    )
 
 
 def _fields(body: str) -> dict[str, str]:

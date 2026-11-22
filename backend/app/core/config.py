@@ -40,6 +40,10 @@ class Settings(BaseSettings):
 
     llm_provider: LlmProvider = "mock"
     llm_model: str = Field(default="glm-4.7", min_length=1)
+    llm_base_url: str = Field(
+        default="https://api.cloudflare.com/client/v4",
+        min_length=1,
+    )
     llm_api_key: SecretStr = SecretStr("")
     llm_timeout_seconds: float = Field(default=60, gt=0)
     llm_output_retries: int = Field(default=2, ge=0)

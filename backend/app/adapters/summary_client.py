@@ -1,4 +1,5 @@
 import os
+import time
 from typing import TypeVar
 
 from pydantic import BaseModel
@@ -8,7 +9,7 @@ from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai_compatible import OpenAICompatibleProvider
 
 from app.core.config import Settings
-from app.domain.ports import LLMRequest
+from app.domain.ports import LLMCall, LLMRequest, LLMResult
 from app.pipeline.prompts import llm_call_key
 
 SummaryT = TypeVar("SummaryT", bound=BaseModel)
@@ -40,7 +41,7 @@ class GatewaySummaryClient:
     @classmethod
     def from_settings(cls, settings: Settings) -> GatewaySummaryClient:
         account = settings.cloudflare_account_id
-        root = settings.classifier_base_url.rstrip("/")
+        root = settings.llm_base_url.rstrip("/")
         return cls(
             model=settings.llm_model,
             api_key=settings.llm_api_key.get_secret_value(),
@@ -49,8 +50,11 @@ class GatewaySummaryClient:
             output_retries=settings.llm_output_retries,
         )
 
-    async def complete(self, request: LLMRequest, output_type: type[SummaryT]) -> SummaryT:
+    async def complete(
+        self, request: LLMRequest, output_type: type[SummaryT]
+    ) -> LLMResult[SummaryT]:
         key = llm_call_key(self._model, request.prompt_id, request.prompt_version)
+        started = time.perf_counter()
         agent: Agent[None, SummaryT] = Agent(
             self._chat,
             output_type=PromptedOutput(output_type),
@@ -70,4 +74,15 @@ class GatewaySummaryClient:
                 "cache_key": key,
             },
         )
-        return result.output
+        usage = result.usage
+        return LLMResult(
+            output=result.output,
+            call=LLMCall(
+                model=self._model,
+                prompt_id=request.prompt_id,
+                prompt_version=request.prompt_version,
+                input_tokens=usage.input_tokens,
+                output_tokens=usage.output_tokens,
+                latency_ms=int((time.perf_counter() - started) * 1000),
+            ),
+        )

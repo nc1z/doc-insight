@@ -9,6 +9,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.factory import build_file_storage, build_job_repository
+from app.api.admin import router as admin_router
 from app.api.jobs import router as jobs_router
 from app.core.config import Settings, get_settings
 from app.core.db import create_engine, create_session_factory, get_session
@@ -55,6 +56,7 @@ def create_app(
     application.dependency_overrides[get_settings] = settings_dependency
     application.state.settings = resolved
     application.include_router(jobs_router)
+    application.include_router(admin_router)
 
     @application.get("/health")
     async def health(session: Annotated[AsyncSession, Depends(get_session)]) -> dict[str, str]:

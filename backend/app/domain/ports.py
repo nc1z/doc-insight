@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Protocol, TypeVar
+from typing import Any, Protocol
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -39,6 +41,7 @@ class DocumentProgress:
     filename: str
     page_count: int | None
     storage_key: str | None
+    job_id: UUID
 
 
 @dataclass(frozen=True)
@@ -128,8 +131,14 @@ class JobRepository(Protocol):
         report: Mapping[str, Any] | None = None,
     ) -> bool: ...
 
+    async def save_llm_calls(
+        self,
+        job_id: UUID,
+        document_id: UUID | None,
+        calls: Sequence[LLMCall],
+    ) -> None: ...
 
-SummaryT = TypeVar("SummaryT", bound=BaseModel)
+    async def list_llm_calls(self, job_id: UUID | None = None) -> Sequence[StoredUsage]: ...
 
 
 @dataclass(frozen=True)
@@ -140,8 +149,40 @@ class LLMRequest:
     user: str
 
 
+@dataclass(frozen=True)
+class LLMCall:
+    model: str
+    prompt_id: str
+    prompt_version: int
+    input_tokens: int
+    output_tokens: int
+    latency_ms: int
+
+
+@dataclass(frozen=True)
+class LLMResult[SummaryT: BaseModel]:
+    output: SummaryT
+    call: LLMCall
+
+
+@dataclass(frozen=True)
+class StoredUsage:
+    job_id: UUID
+    document_id: UUID | None
+    model: str
+    prompt_id: str
+    prompt_version: int
+    input_tokens: int
+    output_tokens: int
+    latency_ms: int
+
+
 class LLMProvider(Protocol):
-    async def complete(self, request: LLMRequest, output_type: type[SummaryT]) -> SummaryT: ...
+    async def complete[SummaryT: BaseModel](
+        self,
+        request: LLMRequest,
+        output_type: type[SummaryT],
+    ) -> LLMResult[SummaryT]: ...
 
 
 class Classifier(Protocol):

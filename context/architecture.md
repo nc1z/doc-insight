@@ -413,7 +413,7 @@ Each step picks its model through configuration (strategy pattern). The pipeline
 - Chunks of that page text in `chunks`. Each chunk carries its page number and does not cross a page. `CHUNK_TOKEN_BUDGET` defaults to 2048 cl100k tokens, enough for a full page of text. A denser page splits inside that page.
 - Programmatic guardrail findings in `guardrail_results`. Each row is the page, the rule, and a short excerpt. The rules are an injection phrase, a fake role marker, invisible characters, a long encoded blob, and text drawn in white or at a tiny size. A classifier row is added when a chunk's probability is above the threshold. A phrase or a role marker is recorded and does not, by itself, mark the document flagged.
 - Document summaries and the consolidated report, as validated JSON.
-- Telemetry per LLM call: model, prompt version, tokens, and latency.
+- Telemetry per LLM call in `llm_calls`: model, prompt id and version, input tokens, output tokens, and latency. `GET /admin/usage` returns those calls. `GET /jobs/{id}` stays the status and the results the frontend polls.
 - Status of each step, so a retried job resumes from the last completed step.
 
 ### Pipeline open decisions

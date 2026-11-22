@@ -107,7 +107,7 @@ Treating it as ETL keeps each stage separate, testable, and swappable, and maps 
   - Entity relationship graph or timeline visualisation.
 - Live per-document progress streaming (SSE).
 - Evaluation harness: a small golden set plus checks (schema validity, entity recall, injection resistance) run in CI.
-- Cost/latency telemetry per job (tokens used, time taken) shown in the UI or logs.
+- Cost and latency telemetry per job (tokens used, time taken) for an admin view or the logs. The analyst view does not show it.
 - Caching by file hash, so re-uploads are instant and free.
 - Works offline with a local model (Ollama) or mock mode, so the reviewer can run it without an API key.
 - Short demo GIF/video in the README.

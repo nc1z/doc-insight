@@ -107,7 +107,7 @@ class DocumentPipeline:
             flagged = checked.flagged or any(finding.rule in ALONE_RULES for finding in findings)
             await self._jobs.save_flag(document_id, flagged)
             return
-        summary = await summarise_document(
+        summary, calls = await summarise_document(
             ExtractInput(filename=progress.filename, page_count=progress.page_count),
             extracted,
             checked,
@@ -124,6 +124,7 @@ class DocumentPipeline:
             delay_seconds=self._delay if status is DocumentStatus.SUMMARISING else 0,
         )
         await self._jobs.save_summary(document_id, summary.model_dump(mode="json"))
+        await self._jobs.save_llm_calls(progress.job_id, document_id, calls)
 
     async def _pages(
         self,
@@ -183,7 +184,7 @@ class DocumentPipeline:
             if document.flagged and document.storage_key is not None
         ]
         excluded = [document.filename for document in job.documents if document.excluded]
-        report = await consolidate_summaries(
+        report, calls = await consolidate_summaries(
             summaries,
             flagged_documents=flagged,
             excluded_files=excluded,
@@ -191,6 +192,7 @@ class DocumentPipeline:
             prompts=self._prompts,
             delay_seconds=self._delay,
         )
+        await self._jobs.save_llm_calls(job_id, None, calls)
         return report.model_dump(mode="json")
 
 

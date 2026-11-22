@@ -2,7 +2,8 @@ import asyncio
 import json
 from collections.abc import Sequence
 
-from app.domain.ports import Classifier, LLMProvider, LLMRequest
+from app.domain.ports import Classifier, LLMCall, LLMProvider, LLMRequest
+from app.pipeline.citations import supported_points
 from app.pipeline.datamark import datamark, datamark_values
 from app.pipeline.extract import extract_pdf_pages
 from app.pipeline.models import (
@@ -78,23 +79,9 @@ async def summarise_document(
     chunks: Sequence[PageChunk],
     *,
     delay_seconds: float,
-) -> DocumentSummary:
+) -> tuple[DocumentSummary, list[LLMCall]]:
     await asyncio.sleep(delay_seconds)
-    outputs: list[ChunkSummary] = []
-    for chunk in chunks:
-        if not chunk.text.strip():
-            continue
-        outputs.append(
-            await llm.complete(
-                render_chunk_prompt(
-                    prompts,
-                    filename=document.filename,
-                    page=chunk.page,
-                    text=chunk.text,
-                ),
-                ChunkSummary,
-            )
-        )
+    outputs, calls = await _chunk_summaries(document, text, llm, prompts, chunks)
     request = prompts.get("document_combine").for_call(
         {
             "filename": document.filename,
@@ -106,7 +93,44 @@ async def summarise_document(
             "excerpts": _excerpts(text, chunks),
         }
     )
-    return await llm.complete(request, DocumentSummary)
+    result = await llm.complete(request, DocumentSummary)
+    calls.append(result.call)
+    summary = result.output.model_copy(
+        update={"notable_points": supported_points(result.output.notable_points, text.pages)}
+    )
+    return summary, calls
+
+
+async def _chunk_summaries(
+    document: ExtractInput,
+    text: ExtractedText,
+    llm: LLMProvider,
+    prompts: SystemPromptCatalog,
+    chunks: Sequence[PageChunk],
+) -> tuple[list[ChunkSummary], list[LLMCall]]:
+    outputs: list[ChunkSummary] = []
+    calls: list[LLMCall] = []
+    for chunk in chunks:
+        if not chunk.text.strip():
+            continue
+        result = await llm.complete(
+            render_chunk_prompt(
+                prompts,
+                filename=document.filename,
+                page=chunk.page,
+                text=chunk.text,
+            ),
+            ChunkSummary,
+        )
+        calls.append(result.call)
+        outputs.append(
+            result.output.model_copy(
+                update={
+                    "notable_points": supported_points(result.output.notable_points, text.pages)
+                }
+            )
+        )
+    return outputs, calls
 
 
 async def consolidate_summaries(
@@ -117,7 +141,7 @@ async def consolidate_summaries(
     llm: LLMProvider,
     prompts: SystemPromptCatalog,
     delay_seconds: float,
-) -> ConsolidatedReport:
+) -> tuple[ConsolidatedReport, list[LLMCall]]:
     await asyncio.sleep(delay_seconds)
     marked = [datamark_values(item.model_dump(mode="json")) for item in summaries]
     request = prompts.get("consolidation").for_call(
@@ -127,7 +151,8 @@ async def consolidate_summaries(
             "excluded": json.dumps(excluded_files),
         }
     )
-    return await llm.complete(request, ConsolidatedReport)
+    result = await llm.complete(request, ConsolidatedReport)
+    return result.output, [result.call]
 
 
 def _excerpts(text: ExtractedText, chunks: Sequence[PageChunk]) -> str:

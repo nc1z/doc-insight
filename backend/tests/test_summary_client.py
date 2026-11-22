@@ -44,7 +44,13 @@ def test_a_summary_that_does_not_match_is_asked_again(caplog: pytest.LogCaptureF
     with caplog.at_level("INFO", logger="app.llm"):
         summary = asyncio.run(client.complete(_REQUEST, _Note))
 
-    assert summary.title == "Harbour Line"
+    assert summary.output.title == "Harbour Line"
+    assert summary.call.model == "glm-4.7"
+    assert summary.call.prompt_id == "document_combine"
+    assert summary.call.prompt_version == 3
+    assert summary.call.input_tokens >= 0
+    assert summary.call.output_tokens >= 0
+    assert summary.call.latency_ms >= 0
     assert calls == [0, 0]
     assert "CANARY-7F3A9C" in instructions[0]
     assert "glm-4.7:document_combine:v3" in caplog.text

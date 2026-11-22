@@ -366,7 +366,7 @@ Solves flow step 6: the job's results contain real key details and a report.
 - [x] Parse each response into the document schema and retry up to a configured limit when it does not match.
 - [x] Add a per-call timeout. No tools. The pipeline order stays fixed.
 
-`GatewaySummaryClient` in `backend/app/adapters/summary_client.py` is the summary client. `LLM_PROVIDER=cloudflare` posts to `{CLASSIFIER_BASE_URL}/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai/v1/chat/completions`. The model name is `LLM_MODEL`. Pydantic AI checks the reply against the document schema or the report schema. A reply that does not match is asked again, up to `LLM_OUTPUT_RETRIES`. Each call stops at `LLM_TIMEOUT_SECONDS`. The model is not given tools, and this client does not choose the next pipeline step. `LLM_PROVIDER` stays `mock` until a real summary is wanted. The mock still returns the fixed summary text.
+`GatewaySummaryClient` in `backend/app/adapters/summary_client.py` is the summary client. `LLM_PROVIDER=cloudflare` posts to `{LLM_BASE_URL}/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai/v1/chat/completions`. The model name is `LLM_MODEL`. Pydantic AI checks the reply against the document schema or the report schema. A reply that does not match is asked again, up to `LLM_OUTPUT_RETRIES`. Each call stops at `LLM_TIMEOUT_SECONDS`. The model is not given tools, and this client does not choose the next pipeline step. `LLM_PROVIDER` stays `mock` until a real summary is wanted. The mock still returns the fixed summary text.
 
 ### 6C. Prompts
 
@@ -386,8 +386,10 @@ Solves flow step 6: the job's results contain real key details and a report.
 
 ### 6E. Citation Checks and Telemetry
 
-- [ ] Verify each notable point's quote appears on its cited page; drop or mark points that fail.
-- [ ] Store model, prompt version, tokens, and latency per LLM call; include totals per job in `GET /jobs/{id}`.
+- [x] Verify each notable point's quote appears on its cited page; drop or mark points that fail.
+- [x] Store the model, prompt version, tokens, and latency for each LLM call. Return that telemetry from an admin endpoint. Leave it off `GET /jobs/{id}`, which the frontend polls.
+
+A notable point stays when its quote is on the page it names (`backend/app/pipeline/citations.py`). A point whose quote is missing from that page is left out of the summary. Each summary call stores the model, the prompt id and version, the input tokens, the output tokens, and the latency in `llm_calls`. `GET /admin/usage` returns those calls, and the totals added up from them. A `job_id` limits the list to one job. `GET /jobs/{id}` stays the status and the results.
 
 ### 6F. Tests and Manual Verification
 

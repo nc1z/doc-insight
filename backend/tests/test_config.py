@@ -23,6 +23,7 @@ _ENV_KEYS = (
     "MOCK_STEP_DELAY_SECONDS",
     "LLM_PROVIDER",
     "LLM_MODEL",
+    "LLM_BASE_URL",
     "LLM_API_KEY",
     "LLM_TIMEOUT_SECONDS",
     "LLM_OUTPUT_RETRIES",
@@ -55,6 +56,7 @@ def test_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert settings.llm_provider == "mock"
     assert settings.llm_model == "glm-4.7"
+    assert settings.llm_base_url == "https://api.cloudflare.com/client/v4"
     assert settings.llm_output_retries == 2
     assert settings.classifier_provider == "cloudflare"
     assert settings.llm_api_key.get_secret_value() == ""
