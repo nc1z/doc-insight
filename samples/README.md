@@ -30,4 +30,6 @@ The channel check also disagrees with the desk on the order book. The desk says 
 | `invalid/empty.pdf`                | A valid PDF with a blank page. Upload accepts it. Extraction later fails with `no_extractable_content`.                                                                                    |
 | `invalid/notes.pdf`                | Plain text renamed to `.pdf`. Upload rejects it as `unsupported_type`.                                                                                                                     |
 
-Regenerate the demo files from `backend/` with `uv run python -m evals.samples`. That command does not rewrite `samples/invalid/`.
+Two ready-made upload sets, a happy path and a failure path, are in `flows/`. See `flows/README.md`.
+
+Regenerate the demo files from `backend/` with `uv run python -m evals.samples`. That command does not rewrite `samples/invalid/`. Regenerate `flows/` with `uv run python -m evals.flows`.
