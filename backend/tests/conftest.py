@@ -20,7 +20,7 @@ def _connect(admin_url: str) -> psycopg.Connection[tuple[object, ...]]:
     except psycopg.OperationalError as exc:
         pytest.fail(
             "The test Postgres container is not available. "
-            "Start it with `docker compose up -d postgres-test --wait`. "
+            "Start it with `pnpm test:db`. "
             f"({exc})"
         )
 

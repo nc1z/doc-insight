@@ -66,7 +66,7 @@ The API container uses `http://minio:9000`. A process on the host uses `S3_ENDPO
 `uv run --directory backend pytest` includes tests that use the `postgres-test` container. That server is separate from the app database on port 5432. Start it with:
 
 ```bash
-docker compose up -d postgres-test --wait
+pnpm test:db
 ```
 
 Those tests connect with `TEST_POSTGRES_USER`, `TEST_POSTGRES_PASSWORD`, and `TEST_POSTGRES_DB` from the repo-root `.env`. They create and drop that database on port 5433, apply migrations, and call `/health`. CI starts the same container. The other tests do not connect.
@@ -77,7 +77,7 @@ Those tests connect with `TEST_POSTGRES_USER`, `TEST_POSTGRES_PASSWORD`, and `TE
   - `gitleaks` scans staged changes for secrets and blocks the commit if any are found. Config: [`.gitleaks.toml`](.gitleaks.toml).
   - `lint-staged` runs Prettier on staged files, and `actionlint` on staged workflow files. Config: `lint-staged` in [`package.json`](package.json).
 - **commit-msg**: `commitlint` enforces [Conventional Commits](https://www.conventionalcommits.org/). Config: `commitlint` in [`package.json`](package.json).
-- **pre-push**: `pnpm test`. Turbo caches each package's test run, so a package with no file changes reuses the last result instead of running again. When the backend cache misses, start `postgres-test` first.
+- **pre-push**: `pnpm test`. Turbo caches each package's test run, so a package with no file changes reuses the last result instead of running again. When the backend cache misses, run `pnpm test:db` first.
 
 ## Commit messages
 
