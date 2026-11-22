@@ -544,8 +544,8 @@ Goal: the repo explains itself to a reviewer.
 
 ### 11A. README
 
-- [ ] Solution overview, architecture diagram, setup instructions, screenshots of generated outputs, assumptions, and known limitations.
-- [ ] Design decisions: output schema, model choice, chunking strategy, and async processing.
+- [x] Solution overview, architecture diagram, setup instructions, screenshots of generated outputs, assumptions, and known limitations.
+- [x] Design decisions: output schema, model choice, chunking strategy, and async processing.
 - [ ] Assumptions grouped by task, one section per task.
 - [ ] CI badge and a link to `samples/`.
 
@@ -555,7 +555,9 @@ Goal: the repo explains itself to a reviewer.
 
 ### 11C. Learning Checkpoint
 
-- [ ] Learning: explain the code changes in small chunks with file names, short snippets, layman explanations, and how the docs map to each required deliverable.
+- [x] Learning: explain the code changes in small chunks with file names, short snippets, layman explanations, and how the docs map to each required deliverable.
+
+The README is what a reviewer reads first. The solution overview says each file gets a headline, short points, and a quote with its page, and that a disagreement keeps both sides. The architecture section draws the running system (browser, nginx, API, worker, Postgres, Procrastinate, MinIO, and the model), then the pipeline: extract, checks, a chunk summary, a document summary, and one consolidation. Setup Instructions is the local run: install Docker, copy `.env.example` to `.env`, and `docker compose up`. The app is at `localhost:8080`. The demo section shows the UI, the happy-path clip, the failure clip, and the PDF in `samples/output/`. Assumptions Made and Known Limitations close the README. Longer choices, including DeepSeek as the summary model, are in `context/decision-record.md`, linked from Design & Planning. `samples/` is linked so a reviewer can upload the same files. That is original.md task 5: overview, diagram, setup, screenshots, assumptions, and limitations.
 
 Suggested commit message: `docs: complete readme with design decisions and assumptions`
 
