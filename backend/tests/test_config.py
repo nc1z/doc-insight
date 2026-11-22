@@ -17,6 +17,9 @@ _ENV_KEYS = (
     "MAX_FILE_BYTES",
     "MAX_PAGE_COUNT",
     "MAX_FILE_COUNT",
+    "AWAITING_INPUT_TIMEOUT_SECONDS",
+    "ORPHAN_MAX_AGE_SECONDS",
+    "MAINTENANCE_CRON",
     "LLM_PROVIDER",
     "LLM_MODEL",
     "LLM_BASE_URL",
@@ -44,6 +47,9 @@ def test_mock_defaults_need_no_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.llm_api_key.get_secret_value() == ""
     assert settings.classifier_api_key.get_secret_value() == ""
     assert settings.max_file_bytes == 20 * 1024 * 1024
+    assert settings.awaiting_input_timeout_seconds == 24 * 60 * 60
+    assert settings.orphan_max_age_seconds == 60 * 60
+    assert settings.maintenance_cron == "*/15 * * * *"
     assert settings.queue_provider == "procrastinate"
     assert settings.storage_provider == "s3"
     assert settings.s3_endpoint == "http://localhost:9000"

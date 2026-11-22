@@ -4,7 +4,9 @@ from sqlalchemy.engine.url import make_url
 PROCESS_JOB = "process_job"
 
 
-def build_queue(database_url: str) -> App:
+def build_queue(database_url: str, *, maintenance_cron: str = "*/15 * * * *") -> App:
+    from app.adapters.maintenance import register_maintenance
+
     application = App(connector=PsycopgConnector(conninfo=_conninfo(database_url)))
 
     @application.task(name=PROCESS_JOB)
@@ -13,6 +15,7 @@ def build_queue(database_url: str) -> App:
         if not job_id:
             raise RuntimeError("The queued job has no id")
 
+    register_maintenance(application, cron=maintenance_cron)
     return application
 
 

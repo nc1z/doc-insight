@@ -196,9 +196,11 @@ Solves flow step 2: a client (Bruno) reads any job's state and resolves rejected
 
 ### 2D. Expiry and Cleanup
 
-- [ ] Add a periodic task that expires `awaiting_input` jobs past a configurable timeout and deletes their files.
-- [ ] Add a periodic task that deletes stored files with no job (orphans) older than a configurable age.
-- [ ] Record the `awaiting_input` timeout default in `decision-record.md`.
+- [x] Add a periodic task that expires `awaiting_input` jobs past a configurable timeout and deletes their files.
+- [x] Add a periodic task that deletes stored files with no job (orphans) older than a configurable age.
+- [x] Record the `awaiting_input` timeout default in `decision-record.md`.
+
+`expire_awaiting_jobs` and `delete_orphan_files` are Procrastinate tasks. `MAINTENANCE_CRON` sets how often they run, and the default is every 15 minutes. They run when the worker process starts. A job left in `awaiting_input` expires after `AWAITING_INPUT_TIMEOUT_SECONDS` (default 24 hours) and its files are deleted. A re-upload refreshes that clock. A bucket object that no document references is deleted after `ORPHAN_MAX_AGE_SECONDS` (default 1 hour).
 
 ### 2E. Tests and Manual Verification
 

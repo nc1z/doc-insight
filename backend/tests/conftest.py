@@ -19,9 +19,7 @@ def _connect(admin_url: str) -> psycopg.Connection[tuple[object, ...]]:
         return psycopg.connect(sync_url.render_as_string(hide_password=False), autocommit=True)
     except psycopg.OperationalError as exc:
         pytest.fail(
-            "The test Postgres container is not available. "
-            "Start it with `pnpm test:db`. "
-            f"({exc})"
+            f"The test Postgres container is not available. Start it with `pnpm test:db`. ({exc})"
         )
 
 

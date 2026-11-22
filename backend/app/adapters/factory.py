@@ -37,7 +37,10 @@ def _postgres_jobs(
     session_factory: async_sessionmaker[AsyncSession],
     settings: Settings,
 ) -> JobRepository:
-    return PostgresJobRepository(session_factory, build_queue(settings.database_url))
+    return PostgresJobRepository(
+        session_factory,
+        build_queue(settings.database_url, maintenance_cron=settings.maintenance_cron),
+    )
 
 
 _JOB_REPOSITORIES: dict[str, JobRepositoryBuilder] = {

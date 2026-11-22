@@ -189,7 +189,7 @@ sequenceDiagram
     API-->>UI: 200 OK (updated job, status cancelled)
 ```
 
-If the analyst never decides, the job expires after a configurable timeout and its stored files are deleted.
+If the analyst never decides, the job expires after 24 hours and its stored files are deleted.
 
 ### Job states during upload
 
@@ -219,7 +219,6 @@ stateDiagram-v2
 ### Open decisions
 
 - **Failures during processing**: whether the same choice applies when a document fails later (for example extraction or LLM failure), by pausing before consolidation.
-- **Timeout for `awaiting_input`**: how long a job waits for a decision before it expires.
 
 ## Status flow
 

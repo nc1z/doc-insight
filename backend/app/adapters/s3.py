@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime
 from typing import Any, Protocol, Self, cast
 
 import boto3
@@ -6,6 +7,7 @@ from botocore.config import Config
 from botocore.exceptions import ClientError
 
 from app.core.config import Settings
+from app.domain.ports import StoredObject
 
 _MISSING_BUCKET = {"404", "NoSuchBucket", "NotFound"}
 _BUCKET_EXISTS = {"BucketAlreadyOwnedByYou", "BucketAlreadyExists"}
@@ -26,6 +28,13 @@ class ObjectStore(Protocol):
     def get_object(self, *, Bucket: str, Key: str) -> Any: ...
 
     def delete_object(self, *, Bucket: str, Key: str) -> Any: ...
+
+    def list_objects_v2(
+        self,
+        *,
+        Bucket: str,
+        ContinuationToken: str | None = None,
+    ) -> Any: ...
 
 
 class S3FileStorage:
@@ -59,6 +68,9 @@ class S3FileStorage:
 
     async def delete(self, key: str) -> None:
         await asyncio.to_thread(self._delete, key)
+
+    async def list_objects(self) -> list[StoredObject]:
+        return await asyncio.to_thread(self._list)
 
     def _ensure_bucket(self) -> None:
         try:
@@ -95,6 +107,19 @@ class S3FileStorage:
 
     def _delete(self, key: str) -> None:
         self._client.delete_object(Bucket=self.bucket, Key=key)
+
+    def _list(self) -> list[StoredObject]:
+        found: list[StoredObject] = []
+        token: str | None = None
+        while True:
+            page = self._client.list_objects_v2(Bucket=self.bucket, ContinuationToken=token)
+            for item in page.get("Contents", []):
+                modified = item["LastModified"]
+                if isinstance(modified, datetime):
+                    found.append(StoredObject(key=str(item["Key"]), last_modified=modified))
+            if not page.get("IsTruncated"):
+                return found
+            token = str(page["NextContinuationToken"])
 
 
 def _is_missing_bucket(exc: ClientError) -> bool:

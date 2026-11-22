@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     max_file_bytes: int = Field(default=20 * 1024 * 1024, gt=0)
     max_page_count: int = Field(default=100, gt=0)
     max_file_count: int = Field(default=10, gt=0)
+    awaiting_input_timeout_seconds: int = Field(default=24 * 60 * 60, gt=0)
+    orphan_max_age_seconds: int = Field(default=60 * 60, gt=0)
+    maintenance_cron: str = Field(default="*/15 * * * *", min_length=1)
 
     llm_provider: LlmProvider = "mock"
     llm_model: str = Field(default="glm-4.7", min_length=1)

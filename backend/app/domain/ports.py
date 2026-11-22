@@ -1,5 +1,6 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
@@ -18,6 +19,12 @@ class NewDocument:
 class NewRejection:
     filename: str
     code: str
+
+
+@dataclass(frozen=True)
+class StoredObject:
+    key: str
+    last_modified: datetime
 
 
 class JobRepository(Protocol):
@@ -42,6 +49,10 @@ class JobRepository(Protocol):
 
     async def cancel(self, job_id: UUID) -> Job | None: ...
 
+    async def expire_awaiting(self, older_than: datetime) -> Sequence[str]: ...
+
+    async def storage_keys(self) -> set[str]: ...
+
 
 class FileStorage(Protocol):
     async def ensure_bucket(self) -> None: ...
@@ -51,3 +62,5 @@ class FileStorage(Protocol):
     async def get(self, key: str) -> bytes: ...
 
     async def delete(self, key: str) -> None: ...
+
+    async def list_objects(self) -> Sequence[StoredObject]: ...

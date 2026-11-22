@@ -33,6 +33,7 @@ These are my decision records and thought process throughout planning & developm
 - `2026-11-21 22:23` **Validation as a sequence of strategies** (`backend/app/domain/validation.py`): a strategy list is extendible for future file types and less difficult to change. A new format is another strategy, and each file keeps its own first rejection while the other files are still checked.
 - `2026-11-22 09:45` **Procrastinate for the queue** (`backend/app/adapters/jobs.py`): Procrastinate can insert the queue row on the caller's database connection, so the job row and the queue row commit together. `create_and_enqueue` is that operation, and the queue payload is the job id.
 - `2026-11-22 09:49` **Adapters and a factory so providers stay swappable** (`backend/app/adapters/factory.py`): file storage and the job queue each sit behind a port, and the factory picks the class from config. A later provider is another class registered on that factory, so the API stays the same.
+- `2026-11-22 10:58` **Waiting jobs expire after 24 hours**: an analyst can leave a mixed upload and finish it the same day. After 24 hours with no decision the job expires and its files are deleted. A stored file with no job is deleted after 1 hour, long enough that an upload still being saved is kept.
 
 ## Re-design based on Industry Practices
 

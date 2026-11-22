@@ -1,3 +1,6 @@
+from app.domain.ports import StoredObject
+
+
 class IdleFileStorage:
     """Storage stand-in so API tests can start without MinIO."""
 
@@ -12,3 +15,6 @@ class IdleFileStorage:
 
     async def delete(self, key: str) -> None:
         return None
+
+    async def list_objects(self) -> list[StoredObject]:
+        return []

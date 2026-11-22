@@ -1,4 +1,5 @@
 import asyncio
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -24,6 +25,7 @@ class _Body:
 class FakeS3:
     def __init__(self, *, head_code: str | None = None) -> None:
         self.objects: dict[str, tuple[bytes, str]] = {}
+        self.modified: dict[str, datetime] = {}
         self.created: list[dict[str, str] | None] = []
         self._head_code = head_code
         self._exists = head_code is None
@@ -46,6 +48,7 @@ class FakeS3:
 
     def put_object(self, *, Bucket: str, Key: str, Body: bytes, ContentType: str) -> dict[str, str]:
         self.objects[Key] = (Body, ContentType)
+        self.modified[Key] = datetime.now(UTC)
         return {}
 
     def get_object(self, *, Bucket: str, Key: str) -> dict[str, Any]:
@@ -54,7 +57,25 @@ class FakeS3:
 
     def delete_object(self, *, Bucket: str, Key: str) -> dict[str, str]:
         del self.objects[Key]
+        self.modified.pop(Key, None)
         return {}
+
+    def list_objects_v2(
+        self,
+        *,
+        Bucket: str,
+        ContinuationToken: str | None = None,
+    ) -> dict[str, Any]:
+        keys = sorted(self.objects)
+        start = int(ContinuationToken or "0")
+        chunk = keys[start : start + 1]
+        next_start = start + len(chunk)
+        truncated = next_start < len(keys)
+        return {
+            "Contents": [{"Key": key, "LastModified": self.modified[key]} for key in chunk],
+            "IsTruncated": truncated,
+            "NextContinuationToken": str(next_start) if truncated else None,
+        }
 
 
 def _storage(client: FakeS3, *, region: str = "us-east-1") -> S3FileStorage:
@@ -98,6 +119,18 @@ def test_put_get_and_delete_round_trip() -> None:
 
     with pytest.raises(KeyError):
         asyncio.run(storage.get("jobs/1/notes.pdf"))
+
+
+def test_list_reads_every_page() -> None:
+    client = FakeS3()
+    storage = _storage(client)
+    asyncio.run(storage.put("b.pdf", b"b", "application/pdf"))
+    asyncio.run(storage.put("a.pdf", b"a", "application/pdf"))
+
+    listed = asyncio.run(storage.list_objects())
+
+    assert [item.key for item in listed] == ["a.pdf", "b.pdf"]
+    assert listed[0].last_modified == client.modified["a.pdf"]
 
 
 def test_factory_builds_the_s3_adapter() -> None:

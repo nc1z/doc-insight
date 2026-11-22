@@ -1,8 +1,10 @@
 from collections.abc import Sequence
+from datetime import UTC, datetime
 from uuid import UUID
 
 import psycopg
 from procrastinate import App
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
@@ -72,6 +74,7 @@ class PostgresJobRepository:
             if job is None:
                 return None
             job.status = transition(job.status, JobStatus.AWAITING_INPUT)
+            job.updated_at = datetime.now(UTC)
             pending = _rejections_by_name(job)
             for document in documents:
                 existing = pending.pop(document.filename, None)
@@ -112,6 +115,32 @@ class PostgresJobRepository:
             job.status = transition(job.status, JobStatus.CANCELLED)
             await session.flush()
         return job
+
+    async def expire_awaiting(self, older_than: datetime) -> list[str]:
+        async with self._sessions() as session, session.begin():
+            found = await session.scalars(
+                select(Job)
+                .where(Job.status == JobStatus.AWAITING_INPUT, Job.updated_at < older_than)
+                .options(selectinload(Job.documents))
+                .with_for_update(of=Job)
+            )
+            keys: list[str] = []
+            for job in found:
+                job.status = transition(job.status, JobStatus.EXPIRED)
+                keys.extend(
+                    document.storage_key
+                    for document in job.documents
+                    if document.storage_key is not None
+                )
+            await session.flush()
+        return keys
+
+    async def storage_keys(self) -> set[str]:
+        async with self._sessions() as session:
+            rows = await session.scalars(
+                select(Document.storage_key).where(Document.storage_key.is_not(None))
+            )
+        return {key for key in rows if key is not None}
 
     async def _locked(self, session: AsyncSession, job_id: UUID) -> Job | None:
         return await session.get(
