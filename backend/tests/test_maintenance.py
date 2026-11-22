@@ -7,7 +7,12 @@ from pypdf import PdfWriter
 from sqlalchemy import text
 
 from app.adapters.jobs import PostgresJobRepository
-from app.adapters.maintenance import DELETE_ORPHAN_FILES, EXPIRE_AWAITING_JOBS
+from app.adapters.maintenance import (
+    DELETE_ORPHAN_FILES,
+    EXPIRE_AWAITING_JOBS,
+    delete_orphans_configured,
+    expire_configured,
+)
 from app.adapters.queue import build_queue
 from app.core.config import Settings
 from app.core.db import create_engine, create_session_factory
@@ -121,6 +126,33 @@ def test_orphan_cleanup_deletes_only_old_unreferenced_files(migrated_database_ur
         asyncio.run(_clear(migrated_database_url))
 
 
+def test_short_configured_timeout_expires_the_job_and_deletes_orphans(
+    migrated_database_url: str,
+) -> None:
+    storage = MemoryStorage()
+    settings = Settings(
+        _env_file=None,
+        database_url=migrated_database_url,
+        awaiting_input_timeout_seconds=1,
+        orphan_max_age_seconds=1,
+    )
+    try:
+        with _client(migrated_database_url, storage) as client:
+            created = client.post("/jobs", files=[_pdf("report.pdf"), _text("notes.pdf")])
+            job_id = created.json()["id"]
+            asyncio.run(_age(migrated_database_url, job_id, "2 seconds"))
+            storage.objects["old-orphan"] = (b"old", datetime.now(UTC) - timedelta(seconds=2))
+            storage.objects["new-orphan"] = (b"new", datetime.now(UTC))
+            asyncio.run(_run_configured(settings, storage))
+            response = client.get(f"/jobs/{job_id}")
+
+        assert response.status_code == 200
+        assert response.json()["status"] == "expired"
+        assert list(storage.objects) == ["new-orphan"]
+    finally:
+        asyncio.run(_clear(migrated_database_url))
+
+
 def test_maintenance_tasks_use_the_configured_schedule() -> None:
     cron = "0 * * * *"
     application = build_queue("postgresql://localhost/unused", maintenance_cron=cron)
@@ -182,13 +214,21 @@ async def _delete_orphans(database_url: str, storage: MemoryStorage) -> None:
         await engine.dispose()
 
 
-async def _age(database_url: str, job_id: str) -> None:
+async def _run_configured(settings: Settings, storage: MemoryStorage) -> None:
+    queue = build_queue(settings.database_url)
+    await expire_configured(queue, settings, storage)
+    await delete_orphans_configured(queue, settings, storage)
+
+
+async def _age(database_url: str, job_id: str, interval: str = "25 hours") -> None:
     engine = create_engine(database_url)
     try:
         async with engine.begin() as connection:
             await connection.execute(
-                text("UPDATE jobs SET updated_at = now() - interval '25 hours' WHERE id = :id"),
-                {"id": job_id},
+                text(
+                    "UPDATE jobs SET updated_at = now() - cast(:interval as interval) WHERE id = :id"
+                ),
+                {"id": job_id, "interval": interval},
             )
     finally:
         await engine.dispose()

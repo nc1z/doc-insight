@@ -1,0 +1,39 @@
+info:
+  name: Re-upload
+  type: http
+  seq: 3
+
+http:
+  method: POST
+  url: "{{baseUrl}}/jobs/{{jobId}}/documents"
+  auth: inherit
+  body:
+    type: multipart-form
+    data:
+      - name: files
+        type: file
+        value:
+          - ../../samples/broker-flash.pdf
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test("adds the replacement and stays waiting", function () {
+          expect(res.body.status).to.equal("awaiting_input");
+          expect(res.body.documents.map((item) => item.filename).sort()).to.eql([
+            "broker-flash.pdf",
+            "desk-note.pdf",
+          ]);
+          expect(res.body.rejected_files.map((item) => item.filename)).to.eql(["notes.pdf"]);
+        });
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "200"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

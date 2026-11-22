@@ -1,12 +1,12 @@
 info:
-  name: Upload mixed
+  name: Upload
   type: http
-  seq: 3
+  seq: 1
 
 http:
   method: POST
   url: "{{baseUrl}}/jobs"
-  auth: none
+  auth: inherit
   body:
     type: multipart-form
     data:
@@ -30,6 +30,7 @@ runtime:
               message: "The file is not a PDF.",
             },
           ]);
+          bru.setVar("jobId", res.body.id);
         });
   assertions:
     - expression: res.status

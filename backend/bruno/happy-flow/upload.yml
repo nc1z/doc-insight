@@ -1,12 +1,12 @@
 info:
-  name: Upload valid
+  name: Upload
   type: http
-  seq: 2
+  seq: 1
 
 http:
   method: POST
   url: "{{baseUrl}}/jobs"
-  auth: none
+  auth: inherit
   body:
     type: multipart-form
     data:
@@ -14,14 +14,16 @@ http:
         type: file
         value:
           - ../../samples/desk-note.pdf
+          - ../../samples/broker-flash.pdf
 
 runtime:
   scripts:
     - type: tests
       code: |-
-        test("queues the job", function () {
+        test("queues both files", function () {
           expect(res.body.status).to.equal("queued");
           expect(res.body.id).to.be.a("string").and.not.empty;
+          bru.setVar("jobId", res.body.id);
         });
   assertions:
     - expression: res.status

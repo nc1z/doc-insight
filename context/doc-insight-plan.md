@@ -204,14 +204,18 @@ Solves flow step 2: a client (Bruno) reads any job's state and resolves rejected
 
 ### 2E. Tests and Manual Verification
 
-- [ ] Integration tests for each action, including `409` for confirming a cancelled job and re-uploading to a queued job.
-- [ ] Test expiry and orphan cleanup with a short configured timeout.
-- [ ] Bruno requests for get, re-upload, confirm, and cancel, chained through a collection variable holding the job ID.
-- [ ] Expected result: a mixed upload can be resolved three ways through Bruno alone.
+- [x] Integration tests for each action, including `409` for confirming a cancelled job and re-uploading to a queued job.
+- [x] Test expiry and orphan cleanup with a short configured timeout.
+- [x] Bruno requests for get, re-upload, confirm, and cancel, chained through a collection variable holding the job ID.
+- [x] Expected result: a mixed upload can be resolved three ways through Bruno alone.
+
+The action tests cover re-upload, confirm, and cancel, including `409` for confirming a cancelled job and re-uploading to a queued job. Expiry and orphan cleanup also run with a 1-second configured timeout. Bruno keeps each scenario in its own folder. Happy flow uploads two valid files and reads the queued job. Mixed re-upload and confirm saves `jobId`, reads the waiting job, adds a replacement, and confirms. All fail uploads three invalid files and expects `422` with no job.
 
 ### 2F. Learning Checkpoint
 
-- [ ] Learning: explain the code changes in small chunks with file names, short snippets, layman explanations, and how the state machine keeps the API and worker in agreement.
+- [x] Learning: explain the code changes in small chunks with file names, short snippets, layman explanations, and how the state machine keeps the API and worker in agreement.
+
+`transition` is the only list of legal status changes. The API calls it for re-upload, confirm, and cancel. Expiry calls it to move a stale waiting job to `expired`. The worker will call the same function for `queued` → `running` → `consolidating` → `succeeded` or `failed`, so neither side can invent a status the other does not allow.
 
 Suggested commit message: `feat(backend): add job status, actions, and expiry`
 

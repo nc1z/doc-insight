@@ -1,0 +1,33 @@
+info:
+  name: Confirm
+  type: http
+  seq: 4
+
+http:
+  method: POST
+  url: "{{baseUrl}}/jobs/{{jobId}}/confirm"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test("queues the job and excludes the file that stayed rejected", function () {
+          expect(res.body.status).to.equal("queued");
+          expect(res.body.documents.map((item) => item.filename).sort()).to.eql([
+            "broker-flash.pdf",
+            "desk-note.pdf",
+          ]);
+          expect(res.body.excluded_files.map((item) => item.filename)).to.eql(["notes.pdf"]);
+          expect(res.body.rejected_files).to.eql([]);
+        });
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "202"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
