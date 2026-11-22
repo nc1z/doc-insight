@@ -62,7 +62,15 @@ async def read_job(
     return _job_view(job)
 
 
-@router.post("/jobs")
+@router.post(
+    "/jobs",
+    status_code=202,
+    response_model=QueuedJob,
+    responses={
+        201: {"model": AwaitingJob},
+        422: {"model": ErrorBody},
+    },
+)
 async def create_job(
     files: Annotated[list[UploadFile], File()],
     settings: Annotated[Settings, Depends(get_settings)],

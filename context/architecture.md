@@ -451,11 +451,9 @@ flowchart LR
   - **One tab per document**: that document's key details, with citations.
 - A download button exports the summaries (good to have).
 
-### URL tracks the job
+### One page
 
-- The page for a job lives at `/jobs/{id}`, so a refresh or a shared link reopens the same job.
-- On load, the page fetches the job and shows whatever state it is in: rejected files awaiting a decision, progress, the report, or a failed, cancelled, or expired message.
-- nginx already falls back to `index.html` for unknown paths, so a refresh on `/jobs/{id}` loads the app instead of a 404.
+- The analyst stays on `/`. Upload, rejected files, progress, and the report replace one another on that page.
 
 ### Past summaries
 

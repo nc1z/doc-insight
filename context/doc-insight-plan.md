@@ -412,22 +412,24 @@ Goal: frontend tooling and a typed API client, ready to build screens.
 
 ### 7A. Tooling
 
-- [ ] Add Tailwind CSS and shadcn/ui; add the components needed later (button, card, tabs, progress, alert, dialog).
-- [ ] Add TanStack Query with a query client provider, and a router with routes `/` and `/jobs/:id`.
+- [x] Add Tailwind CSS and shadcn/ui; add the components needed later (button, card, tabs, progress, alert, dialog).
+- [x] Add TanStack Query with a query client provider. The app is the home page.
 
 ### 7B. Typed API Client
 
-- [ ] Generate TypeScript types from the backend's OpenAPI schema, with a script to regenerate them.
-- [ ] Add API functions for every job endpoint, mapping the backend error schema to one client error type.
+- [x] Generate TypeScript types from the backend's OpenAPI schema, with a script to regenerate them.
+- [x] Add API functions for every job endpoint, mapping the backend error schema to one client error type.
 
 ### 7C. Verification Setup
 
-- [ ] Add Playwright with a smoke test that loads `/` against the Compose stack in mock mode.
-- [ ] Run the smoke test in the CI `docker` job.
+- [x] Add Playwright with a smoke test that loads `/` against the Compose stack in mock mode.
+- [x] Run the smoke test in the CI `docker` job.
 
 ### 7D. Learning Checkpoint
 
-- [ ] Learning: explain the code changes in small chunks with file names, short snippets, layman explanations, and how generated types keep the frontend in step with the backend.
+- [x] Learning: explain the code changes in small chunks with file names, short snippets, layman explanations, and how generated types keep the frontend in step with the backend.
+
+Tailwind and the shared controls live in `frontend/src/index.css` and `frontend/src/components/ui` (button, card, tabs, progress, alert, dialog). `frontend/src/App.tsx` gives the home page a TanStack Query client. `pnpm --filter frontend openapi` reads the FastAPI schema and writes `frontend/src/api/schema.d.ts`. The job functions in `frontend/src/api/client.ts` use those generated types, and a failed response becomes one `ApiError` with the backend code and message. A Playwright test loads `/` against the Compose stack from the CI `docker` job.
 
 Suggested commit message: `feat(frontend): add tailwind, shadcn, tanstack query, and typed api client`
 
@@ -441,7 +443,7 @@ Solves flow step 7: landing page, upload, and the three choices for rejected fil
 
 - [ ] Build the landing page: title, a one- or two-line instruction, and a drag-and-drop file input with a file picker.
 - [ ] Validate type, size, and count on the client; let the analyst replace or remove rejected files before upload.
-- [ ] Submit to `POST /jobs` and navigate to `/jobs/{id}`.
+- [ ] Submit to `POST /jobs` and show that job on the home page.
 
 ### 8B. Rejected Files Screen
 
@@ -461,7 +463,7 @@ Suggested commit message: `feat(frontend): add upload and rejected-files flow`
 
 ## 9. Frontend Progress and Report
 
-Goal: the analyst watches progress and reads the report, and the URL survives refresh.
+Goal: the analyst watches progress and reads the report on the home page.
 
 Solves flow step 8: progress, report, and error states.
 
@@ -480,7 +482,7 @@ Solves flow step 8: progress, report, and error states.
 
 - [ ] Show `failed`, `cancelled`, and `expired` with the reason and a link back to upload; show `404` as "job not found".
 - [ ] Show a global error when the backend is unreachable.
-- [ ] Load any job state directly from `/jobs/{id}` on refresh.
+- [ ] The job stays on the home page.
 
 ### 9D. Past Summaries
 
@@ -489,7 +491,7 @@ Solves flow step 8: progress, report, and error states.
 
 ### 9E. Tests and Manual Verification
 
-- [ ] Playwright smoke tests: upload samples in mock mode, reach the report, refresh on `/jobs/{id}`, open a past summary.
+- [ ] Playwright smoke tests: upload samples in mock mode, reach the report on the home page, refresh, and open a past summary.
 - [ ] Agentic verification of progress, report tabs, flags, and failure states, with screenshots for the README.
 
 ### 9F. Learning Checkpoint

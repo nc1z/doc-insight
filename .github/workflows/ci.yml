@@ -67,6 +67,10 @@ jobs:
 
       - run: pnpm bruno
 
+      - run: pnpm --filter frontend exec playwright install --with-deps chromium
+
+      - run: pnpm --filter frontend test:e2e
+
       - if: failure()
         run: docker compose logs
 

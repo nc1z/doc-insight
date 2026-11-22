@@ -10,6 +10,7 @@ WORKDIR /repo
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY frontend/package.json frontend/
 COPY backend/package.json backend/
+COPY tools/openapi-gen/package.json tools/openapi-gen/
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
     pnpm install --frozen-lockfile --filter frontend
 

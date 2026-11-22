@@ -1,8 +1,19 @@
+import { QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import App from './App';
 
-describe('App', () => {
+import { HomePage } from '@/pages/home';
+import { createQueryClient } from '@/query';
+
+function renderPage() {
+  return render(
+    <QueryClientProvider client={createQueryClient()}>
+      <HomePage />
+    </QueryClientProvider>,
+  );
+}
+
+describe('home page', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
@@ -15,16 +26,16 @@ describe('App', () => {
       );
     vi.stubGlobal('fetch', fetchMock);
 
-    render(<App />);
+    renderPage();
 
-    expect(await screen.findByRole('status')).toHaveTextContent('Backend health: 200 OK');
-    expect(fetchMock).toHaveBeenCalledWith('/api/health', expect.anything());
+    expect(await screen.findByText('Backend health: 200 OK')).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith('/api/health');
   });
 
   it('shows an error when the backend is unreachable', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Failed to fetch')));
 
-    render(<App />);
+    renderPage();
 
     expect(await screen.findByText(/unavailable \(Failed to fetch\)/)).toBeInTheDocument();
   });

@@ -144,6 +144,11 @@ def test_openapi_schema_matches_the_job_view() -> None:
     assert operation["responses"]["404"]["content"]["application/json"]["schema"]["$ref"].endswith(
         "/ErrorBody"
     )
+    created = schema["paths"]["/jobs"]["post"]["responses"]
+    assert created["201"]["content"]["application/json"]["schema"]["$ref"].endswith("/AwaitingJob")
+    assert created["202"]["content"]["application/json"]["schema"]["$ref"].endswith("/QueuedJob")
+    assert created["422"]["content"]["application/json"]["schema"]["$ref"].endswith("/ErrorBody")
+    assert "200" not in created
 
 
 def _client(database_url: str) -> TestClient:

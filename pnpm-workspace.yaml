@@ -1,6 +1,7 @@
 packages:
   - frontend
   - backend
+  - tools/openapi-gen
 
 overrides:
   '@faker-js/faker': 10.6.0
