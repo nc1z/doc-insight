@@ -19,6 +19,9 @@ __pycache__/
 .ruff_cache/
 .mypy_cache/
 
+# Eval PDFs rendered from backend/evals/fixtures.json
+backend/evals/generated/
+
 # Environment / secrets
 .env
 .env.*

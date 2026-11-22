@@ -140,12 +140,14 @@ Procrastinate is the queue, recorded on `2026-11-22`. `PostgresJobRepository.cre
 
 ### 1F. Sample Fixtures
 
-- [ ] Add a fixture builder that generates the eval PDFs from `backend/evals/fixtures.json` (text, scanned, chart, hidden-text, and invalid binary variants); generated PDFs are not committed.
-- [ ] Turn the `ci_mock` file-validation cases in `backend/evals/adversarial.json` (A14–A22) into integration tests.
-- [ ] Add `samples/` with 2–4 real PDFs on one topic for the demo and a `samples/README.md` listing source and licence.
-- [ ] Include at least two samples that disagree on a fact, so the report must surface a contradiction.
-- [ ] Add `samples/invalid/`: corrupt, encrypted, empty, and non-PDF renamed to `.pdf`.
-- [ ] Add `samples/adversarial/` with a PDF containing injected instructions.
+- [x] Add a fixture builder that generates the eval PDFs from `backend/evals/fixtures.json` (text, scanned, chart, hidden-text, and invalid binary variants); generated PDFs are not committed.
+- [x] Turn the `ci_mock` file-validation cases in `backend/evals/adversarial.json` (A14–A22) into integration tests.
+- [x] Add `samples/` with 2–4 real PDFs on one topic for the demo and a `samples/README.md` listing source and licence.
+- [x] Include at least two samples that disagree on a fact, so the report must surface a contradiction.
+- [x] Add `samples/invalid/`: corrupt, encrypted, empty, and non-PDF renamed to `.pdf`.
+- [x] Add `samples/adversarial/` with a PDF containing injected instructions.
+
+`backend/evals/builder.py` renders `fixtures.json` when a test asks for a document. Text keeps a text layer, scanned pages and charts are images, hidden text is white 1pt type, and invisible text is Unicode tag characters. `python -m evals.builder` writes the files under `backend/evals/generated/`, which is gitignored. A14–A22 upload those files and check the status, the error code, and that no job is stored. `samples/` is a fictional Cedar Ridge Capital packet on Northline Semiconductor (NTLN), released as CC0. Short notes sit next to a few longer memos. The desk and the broker disagree on FY26 revenue, gross margin, and the price target, and the channel check disagrees with the desk on the order book. `samples/invalid/` is unchanged.
 
 ### 1G. Tests and Manual Verification
 
