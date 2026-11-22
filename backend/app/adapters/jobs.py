@@ -5,15 +5,15 @@ from uuid import UUID
 
 import psycopg
 from procrastinate import App
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
 from app.adapters.queue import CONSOLIDATE_JOB, PROCESS_DOCUMENT
 from app.core.errors import DomainError
 from app.domain.job_state import transition
-from app.domain.models import Document, Job
-from app.domain.ports import DocumentProgress, NewDocument, NewRejection
+from app.domain.models import Document, Job, Page
+from app.domain.ports import DocumentProgress, NewDocument, NewRejection, StoredPage
 from app.domain.status import DocumentStatus, JobStatus
 
 
@@ -196,6 +196,7 @@ class PostgresJobRepository:
                 stored=document.storage_key is not None,
                 filename=document.filename,
                 page_count=document.page_count,
+                storage_key=document.storage_key,
             )
 
     async def complete_step(
@@ -251,6 +252,33 @@ class PostgresJobRepository:
             if document is None:
                 return
             document.summary = dict(summary)
+
+    async def replace_pages(self, document_id: UUID, pages: Sequence[StoredPage]) -> None:
+        async with self._sessions() as session, session.begin():
+            document = await session.get(Document, document_id)
+            if document is None:
+                return
+            await session.execute(delete(Page).where(Page.document_id == document_id))
+            await session.flush()
+            session.add_all(
+                Page(
+                    document_id=document_id,
+                    page_number=page.page_number,
+                    text=page.text,
+                    needs_image=page.needs_image,
+                )
+                for page in pages
+            )
+
+    async def list_pages(self, document_id: UUID) -> Sequence[StoredPage]:
+        async with self._sessions() as session:
+            rows = await session.scalars(
+                select(Page).where(Page.document_id == document_id).order_by(Page.page_number)
+            )
+            return [
+                StoredPage(page_number=row.page_number, text=row.text, needs_image=row.needs_image)
+                for row in rows
+            ]
 
     async def consolidate(self, job_id: UUID, report: Mapping[str, Any] | None = None) -> bool:
         async with self._sessions() as session, session.begin():

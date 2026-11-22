@@ -15,7 +15,6 @@ from app.adapters.mocks.mock_llm import MockLLM
 from app.adapters.queue import build_queue
 from app.core.config import Settings
 from app.core.db import create_engine, create_session_factory
-from app.domain.failures import StepFailure
 from app.main import create_app
 from app.pipeline.models import ExtractedText, ExtractInput, PageText
 from app.pipeline.steps import check_document, extract_text
@@ -33,21 +32,12 @@ def test_extract_waits_for_the_configured_delay(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr("app.pipeline.steps.asyncio.sleep", fake_sleep)
 
     extracted = asyncio.run(
-        extract_text(ExtractInput(filename="notes.pdf", page_count=2), delay_seconds=0.5)
+        extract_text(ExtractInput(filename="notes.pdf", page_count=1), _pdf(), delay_seconds=0.5)
     )
 
     assert slept == [0.5]
-    assert [page.text for page in extracted.pages] == ["notes.pdf page 1", "notes.pdf page 2"]
-
-
-def test_extract_fails_the_unreadable_fixture() -> None:
-    with pytest.raises(StepFailure) as caught:
-        asyncio.run(
-            extract_text(ExtractInput(filename="unreadable.pdf", page_count=1), delay_seconds=0)
-        )
-
-    assert caught.value.code == "unreadable_document"
-    assert caught.value.permanent is True
+    assert len(extracted.pages) == 1
+    assert extracted.pages[0].needs_image is False
 
 
 def test_check_flags_the_injection_phrase() -> None:
@@ -107,10 +97,13 @@ async def _worker_reaches_succeeded(database_url: str) -> None:
     queue = build_queue(database_url, maintenance_cron="0 0 1 1 *")
     repository = PostgresJobRepository(create_session_factory(engine), queue)
     bind_jobs(repository)
-    bind_pipeline(DocumentPipeline(repository, MockLLM(), MockClassifier(), delay_seconds=0))
+    storage = _Storage()
+    bind_pipeline(
+        DocumentPipeline(repository, MockLLM(), MockClassifier(), storage, delay_seconds=0)
+    )
     try:
         await _clear(engine)
-        with _client(database_url) as client:
+        with _client(database_url, storage) as client:
             created = client.post(
                 "/jobs",
                 files=[("files", ("desk-note.pdf", _pdf(), "application/pdf"))],
@@ -138,9 +131,12 @@ async def _worker_reaches_succeeded(database_url: str) -> None:
 async def _stores_results(database_url: str) -> None:
     engine = create_engine(database_url)
     repository = PostgresJobRepository(create_session_factory(engine), build_queue(database_url))
-    bind_pipeline(DocumentPipeline(repository, MockLLM(), MockClassifier(), delay_seconds=0))
+    storage = _Storage()
+    bind_pipeline(
+        DocumentPipeline(repository, MockLLM(), MockClassifier(), storage, delay_seconds=0)
+    )
     try:
-        with _client(database_url) as client:
+        with _client(database_url, storage) as client:
             created = client.post(
                 "/jobs",
                 files=[("files", ("desk-note.pdf", _pdf(), "application/pdf"))],
@@ -149,6 +145,8 @@ async def _stores_results(database_url: str) -> None:
             document_id = UUID(client.get(f"/jobs/{job_id}").json()["documents"][0]["id"])
             await run_document(repository, document_id)
             await run_consolidation(repository, job_id)
+            pages = await repository.list_pages(document_id)
+            await repository.replace_pages(document_id, pages)
             body = client.get(f"/jobs/{job_id}").json()
         assert body["status"] == "succeeded"
         assert body["progress"] == {"completed_steps": 3, "total_steps": 3}
@@ -157,6 +155,10 @@ async def _stores_results(database_url: str) -> None:
         assert body["documents"][0]["summary"]["summary"] == "Mock summary of desk-note.pdf."
         assert body["report"]["summary"] == "Mock report of desk-note.pdf."
         assert body["report"]["excluded_files"] == []
+        assert [(page.page_number, page.text, page.needs_image) for page in pages] == [
+            (1, "", False)
+        ]
+        assert len(await repository.list_pages(document_id)) == 1
     finally:
         bind_pipeline(None)
         await _clear(engine)
@@ -191,10 +193,10 @@ class _Storage:
         return []
 
 
-def _client(database_url: str) -> TestClient:
+def _client(database_url: str, storage: _Storage | None = None) -> TestClient:
     application = create_app(
         Settings(_env_file=None, database_url=database_url),
-        file_storage=_Storage(),
+        file_storage=storage or _Storage(),
     )
     return TestClient(application)
 

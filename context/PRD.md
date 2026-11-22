@@ -102,7 +102,7 @@ Existing summarisers handle one document at a time and don't show which document
 ### Extraction and analysis
 
 - The system shall extract text per page, keeping page numbers.
-- The system shall send page images to a multimodal model or run OCR when a page has little or no extractable text.
+- The system shall send a page to a multimodal model or OCR when `page.get_image_info()` lists an image displayed on that page.
 - The system shall chunk long documents and summarise them with map-reduce, within a configurable token budget.
 - The system shall produce per-document key details that match a documented Pydantic schema.
 - The system shall produce a consolidated report from the per-document results, matching a documented schema.

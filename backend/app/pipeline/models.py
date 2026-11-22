@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 class PageText(BaseModel):
     page: int
     text: str
+    needs_image: bool = False
 
 
 class ExtractInput(BaseModel):

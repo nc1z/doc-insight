@@ -100,7 +100,9 @@ The Bruno collection is in [`backend/bruno/`](backend/bruno/).
 2. In Bruno, choose **Open Collection** and select `backend/bruno/`.
 3. Select the `local` environment, which points to `http://localhost:8000`.
 
-To run the whole collection from the terminal, run `pnpm bruno`.
+To run the whole collection from the terminal, run `pnpm bruno`. That command skips the Processing failure folder.
+
+Processing failure is manual. `unreadable.pdf` is a blank page, so extraction succeeds on it. Make `extract_text` in `backend/app/pipeline/steps.py` throw `StepFailure("unreadable_document", permanent=True)` for that filename, restart the worker, run `pnpm bruno:manual`, then remove the throw. The note is on the folder and on its upload request.
 
 Add a request for each new endpoint, with tests or assertions for the expected response.
 

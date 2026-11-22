@@ -61,7 +61,7 @@ Benchmarks below come from interested parties: the [docling.org comparison](http
 | Unstructured | about 0.4 s (fast mode)           | Apache 2.0 | Fast mode returned empty text on one chart-heavy report (Parsebridge)   |
 | Marker       | about 90 s                        | —          | Built for GPUs; too slow on CPU                                         |
 
-**For us**: the PDF library decision is between PyMuPDF4LLM (speed, AGPL) and Docling (MIT, built-in OCR that could cover scanned pages without a system package).
+**For us**: PyMuPDF4LLM. The sample memos are born-digital and each page extracts in well under a second. A page is marked for Phase 8 when `page.get_image_info()` lists an image displayed on that page, so a short page of text stays unmarked. Phase 8 can render a marked page for Tesseract or a vision model. PyMuPDF is AGPL, which is acceptable for this local assignment. Shipping it inside a closed product needs Artifex's commercial licence.
 
 ## Evaluating summaries
 

@@ -1,30 +1,26 @@
 import asyncio
 import json
 
-from app.domain.failures import StepFailure
 from app.domain.ports import Classifier, LLMProvider
+from app.pipeline.extract import extract_pdf_pages
 from app.pipeline.models import (
     CheckResult,
     ConsolidatedReport,
     DocumentSummary,
     ExtractedText,
     ExtractInput,
-    PageText,
 )
 
 
-async def extract_text(document: ExtractInput, *, delay_seconds: float) -> ExtractedText:
-    # Bruno uploads this name to exercise a failed document and the analyst's decision.
-    if document.filename == "unreadable.pdf":
-        raise StepFailure("unreadable_document", permanent=True)
+async def extract_text(
+    document: ExtractInput,
+    data: bytes,
+    *,
+    delay_seconds: float,
+) -> ExtractedText:
     await asyncio.sleep(delay_seconds)
-    count = document.page_count or 1
-    return ExtractedText(
-        pages=[
-            PageText(page=number, text=f"{document.filename} page {number}")
-            for number in range(1, count + 1)
-        ]
-    )
+    pages = await asyncio.to_thread(extract_pdf_pages, data)
+    return ExtractedText(pages=pages)
 
 
 async def check_document(

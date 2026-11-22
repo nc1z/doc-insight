@@ -2,3 +2,12 @@ info:
   name: Processing failure
   type: folder
   seq: 5
+  tags:
+    - manual
+
+docs:
+  content: |
+    Manual only. `pnpm bruno` skips this folder.
+
+    `unreadable.pdf` is a blank page, so extraction succeeds on it. To run this flow, make `extract_text` in `backend/app/pipeline/steps.py` throw `StepFailure("unreadable_document", permanent=True)` for that filename, restart the worker, then run `pnpm bruno:manual`. Remove the throw afterwards. The polls expect that code and the message "The document could not be read."
+  type: text/markdown

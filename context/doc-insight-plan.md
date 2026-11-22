@@ -10,7 +10,7 @@ Primary services/packages/frameworks:
 - **Postgres + SQLAlchemy 2 + Alembic**: job store, results store, and queue in one database; migrations run automatically at startup.
 - **Postgres-backed queue library (Procrastinate or PGQueuer)**: lets the API create and enqueue a job in one transaction, and runs the worker.
 - **pydantic and pydantic-settings**: typed config from environment variables, and the schemas every LLM output is validated against.
-- **PDF library (PyMuPDF4LLM or Docling)**: validation, per-page text, page images, and font data for hidden-text checks.
+- **PyMuPDF4LLM**: per-page text. A page is marked for image handling in Phase 8 when `get_image_info()` shows an image on that page.
 - **GLM 4.7 or later through an OpenAI-compatible client**: document summaries and consolidation.
 - **Jev**: decision model for prompt-injection detection and document type.
 - **Bruno**: manual and CLI API testing for every backend endpoint.
@@ -260,7 +260,7 @@ A transient step failure retries 3 times with exponential backoff and jitter. Af
 
 - [x] Integration test: create a job, run the worker in-process, assert the job reaches `succeeded` with mock summaries and report.
 - [x] Integration test: a forced step failure produces the decided failure behaviour.
-- [x] Bruno: upload, then poll `GET /jobs/{id}` until `succeeded`. Happy flow uploads the two samples and polls for up to 30 seconds. Processing failure uploads `desk-note.pdf` with `unreadable.pdf`, which the mock extract rejects. It polls until the analyst is asked, retries, continues without the failed file, and polls until the report lists that file.
+- [x] Bruno: upload, then poll `GET /jobs/{id}` until `succeeded`. Happy flow uploads the two samples and polls for up to 30 seconds. Processing failure is a manual folder: `unreadable.pdf` is a blank page, so the note on its upload request says to throw `StepFailure("unreadable_document", permanent=True)` from `extract_text` and restart the worker before running `pnpm bruno:manual`. `pnpm bruno` skips that folder.
 - [x] Run the Bruno collection with the Bruno CLI in the CI `docker` job against the Compose stack in mock mode. `pnpm bruno` runs `@usebruno/cli` after the stack is healthy.
 
 ### 3F. Learning Checkpoint
@@ -279,9 +279,11 @@ Solves flow step 4: the worker reads each document's text, keeping page numbers.
 
 ### 4A. Per-Page Extraction
 
-- [ ] Choose the PDF library: PyMuPDF4LLM (fastest, AGPL, needs Tesseract for scans) or Docling (MIT, slower, built-in OCR); time both on `samples/` and record the decision.
-- [ ] Extract text per page and store it in a `pages` table for citation checks and re-runs.
-- [ ] Mark pages with little or no text as needing image handling (done in Phase 8).
+- [x] Choose the PDF library: PyMuPDF4LLM (fastest, AGPL, needs Tesseract for scans) or Docling (MIT, slower, built-in OCR); time both on `samples/` and record the decision.
+- [x] Extract text per page and store it in a `pages` table for citation checks and re-runs.
+- [x] Mark a page for image handling when `get_image_info()` shows an image on that page (done in Phase 8).
+
+PyMuPDF4LLM reads each page of these born-digital memos in well under a second. The text is stored in `pages`. `needs_image` is set when `page.get_image_info()` lists an image displayed on the page. A short page of text stays unmarked, and so does a blank page. The scanned expert call and the chart page are marked because each displays an image. Phase 8 can render those pages for Tesseract or a vision model. PyMuPDF is AGPL, which is acceptable for this local assignment; a commercial Artifex licence is required if it ships inside a closed product.
 
 ### 4B. Chunking
 
@@ -419,7 +421,7 @@ Solves flow step 8: charts and scanned pages contribute to summaries.
 ### 8A. Approach Decision
 
 - [ ] Decide between OCR, a multimodal model, or OCR for scanned text plus a multimodal model for charts; record it.
-- [ ] If Docling was chosen in Phase 4, use its built-in OCR for scanned pages before adding another tool.
+- [ ] Render each page stored with `needs_image` and pass the image to Tesseract or a vision model.
 
 ### 8B. Implementation
 

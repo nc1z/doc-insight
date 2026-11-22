@@ -1,10 +1,12 @@
+from __future__ import annotations
+
 import uuid
 from datetime import datetime
 from enum import StrEnum
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import DateTime, Enum, ForeignKey, String, Text, false, func
+from sqlalchemy import DateTime, Enum, ForeignKey, String, Text, UniqueConstraint, false, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -72,3 +74,24 @@ class Document(Base):
     )
 
     job: Mapped[Job] = relationship(back_populates="documents")
+    pages: Mapped[list[Page]] = relationship(
+        back_populates="document",
+        cascade="all, delete-orphan",
+        order_by="Page.page_number",
+    )
+
+
+class Page(Base):
+    __tablename__ = "pages"
+    __table_args__ = (UniqueConstraint("document_id", "page_number"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid4)
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE"),
+        index=True,
+    )
+    page_number: Mapped[int]
+    text: Mapped[str] = mapped_column(Text)
+    needs_image: Mapped[bool] = mapped_column(server_default=false(), default=False)
+
+    document: Mapped[Document] = relationship(back_populates="pages")

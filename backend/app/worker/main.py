@@ -1,6 +1,6 @@
 import asyncio
 
-from app.adapters.factory import build_classifier, build_llm
+from app.adapters.factory import build_classifier, build_file_storage, build_llm
 from app.adapters.jobs import PostgresJobRepository
 from app.adapters.queue import build_queue
 from app.core.config import get_settings
@@ -25,6 +25,7 @@ def main() -> None:
             repository,
             build_llm(settings),
             build_classifier(settings),
+            build_file_storage(settings),
             delay_seconds=delay,
         )
     )

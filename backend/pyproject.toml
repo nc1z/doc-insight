@@ -11,6 +11,7 @@ dependencies = [
     "procrastinate>=3.11.0",
     "psycopg[binary]>=3.3.9",
     "pydantic-settings>=2.16.3",
+    "pymupdf4llm>=2.1",
     "pypdf>=7.1.0",
     "reportlab>=5.1.0",
     "sqlalchemy[asyncio]>=2",
@@ -37,7 +38,16 @@ disallow_untyped_defs = true
 warn_unused_ignores = true
 
 [[tool.mypy.overrides]]
-module = ["boto3", "boto3.*", "botocore", "botocore.*"]
+module = [
+    "boto3",
+    "boto3.*",
+    "botocore",
+    "botocore.*",
+    "pymupdf",
+    "pymupdf.*",
+    "pymupdf4llm",
+    "pymupdf4llm.*",
+]
 ignore_missing_imports = true
 
 [dependency-groups]

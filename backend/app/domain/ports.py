@@ -36,6 +36,14 @@ class DocumentProgress:
     stored: bool
     filename: str
     page_count: int | None
+    storage_key: str | None
+
+
+@dataclass(frozen=True)
+class StoredPage:
+    page_number: int
+    text: str
+    needs_image: bool
 
 
 @dataclass(frozen=True)
@@ -86,6 +94,10 @@ class JobRepository(Protocol):
     async def save_flag(self, document_id: UUID, flagged: bool) -> None: ...
 
     async def save_summary(self, document_id: UUID, summary: Mapping[str, Any]) -> None: ...
+
+    async def replace_pages(self, document_id: UUID, pages: Sequence[StoredPage]) -> None: ...
+
+    async def list_pages(self, document_id: UUID) -> Sequence[StoredPage]: ...
 
     async def consolidate(
         self,
