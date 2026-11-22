@@ -80,6 +80,8 @@ function documentLevel(status: string): number {
   }
 }
 
+// The steps follow what the file rows show. With several files in flight, every step that
+// some file is on (or is still waiting on) pulses, so the card never disagrees with a row.
 function stepStates(job: JobView): StepState[] {
   if (job.status === 'succeeded') {
     return ['done', 'done', 'done', 'done'];
@@ -87,11 +89,33 @@ function stepStates(job: JobView): StepState[] {
   if (job.status === 'consolidating') {
     return ['done', 'done', 'done', 'active'];
   }
-  const level =
-    job.documents.length === 0
-      ? 0
-      : Math.min(...job.documents.map((document) => documentLevel(document.status)));
-  return STEPS.map((_, index) => (index < level ? 'done' : index === level ? 'active' : 'todo'));
+  const levels = job.documents.map((document) => documentLevel(document.status));
+  if (levels.length === 0) {
+    return ['active', 'todo', 'todo', 'todo'];
+  }
+  const lowest = Math.min(...levels);
+  if (lowest >= 3) {
+    return ['done', 'done', 'done', 'active'];
+  }
+  const running = job.documents
+    .filter((document) => document.status !== 'pending')
+    .map((document) => documentLevel(document.status));
+  const states = STEPS.map((_, index): StepState => {
+    if (index < lowest) {
+      return 'done';
+    }
+    if (index === 3) {
+      return 'todo';
+    }
+    if (running.includes(index) || levels.some((level) => level > index)) {
+      return 'active';
+    }
+    return 'todo';
+  });
+  if (!states.includes('active')) {
+    states[lowest] = 'active';
+  }
+  return states;
 }
 
 // The backend counts the three per-document steps. The final report is one more step on top.
@@ -171,22 +195,15 @@ function Stepper({ states }: { states: StepState[] }) {
   );
 }
 
-function ReportSkeleton() {
-  return (
-    <div aria-hidden className="space-y-2.5">
-      <div className="shimmer h-3 w-11/12 rounded-full" />
-      <div className="shimmer h-3 w-full rounded-full [animation-delay:150ms]" />
-      <div className="shimmer h-3 w-4/5 rounded-full [animation-delay:300ms]" />
-      <div className="flex gap-2 pt-2">
-        <div className="shimmer h-6 w-16 rounded-full [animation-delay:450ms]" />
-        <div className="shimmer h-6 w-24 rounded-full [animation-delay:600ms]" />
-        <div className="shimmer h-6 w-20 rounded-full [animation-delay:750ms]" />
-      </div>
-    </div>
-  );
-}
-
-function Activity({ active }: { active: number }) {
+function Activity({
+  active,
+  finished,
+  total,
+}: {
+  active: number;
+  finished: number;
+  total: number;
+}) {
   const step = STEPS[active] ?? STEPS[0]!;
   const message = useCycle(step.messages.length, 2600);
   const Icon = active === STEPS.length - 1 ? Sparkles : step.icon;
@@ -198,14 +215,24 @@ function Activity({ active }: { active: number }) {
       >
         <Icon className="size-4 animate-pulse" />
       </span>
-      <div className="min-w-0">
-        <p className="text-sm font-medium">{step.title}</p>
-        <p
-          key={`${active}:${message}`}
-          className="mt-0.5 animate-in text-sm text-muted-foreground duration-500 fade-in-0 slide-in-from-bottom-1"
-        >
-          {step.messages[message % step.messages.length]}
-        </p>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline justify-between gap-4">
+          <p className="text-sm font-medium">{step.title}</p>
+          {active < STEPS.length - 1 && total > 0 && (
+            <p className="shrink-0 text-xs text-muted-foreground tabular-nums">
+              {finished} of {total} {total === 1 ? 'file' : 'files'} done
+            </p>
+          )}
+        </div>
+        {/* Two lines reserved, so a longer message never pushes the page down. */}
+        <div className="mt-0.5 min-h-10">
+          <p
+            key={`${active}:${message}`}
+            className="animate-in text-sm leading-5 text-muted-foreground duration-500 fade-in-0 slide-in-from-bottom-1"
+          >
+            {step.messages[message % step.messages.length]}
+          </p>
+        </div>
       </div>
     </div>
   );
@@ -213,10 +240,8 @@ function Activity({ active }: { active: number }) {
 
 export function Working({ job }: { job: JobView }) {
   const states = stepStates(job);
-  const active = Math.max(
-    0,
-    states.findIndex((state) => state === 'active'),
-  );
+  const active = Math.max(0, states.lastIndexOf('active'));
+  const finished = job.documents.filter((document) => documentLevel(document.status) >= 3).length;
   const percent = overallPercent(job);
   const finalising = active === STEPS.length - 1;
   return (
@@ -227,19 +252,14 @@ export function Working({ job }: { job: JobView }) {
           <Progress
             value={percent}
             aria-label="Progress"
-            className={cn(finalising && 'shimmer-bar')}
+            className={cn(finalising && 'sheen-bar')}
           />
           <span className="w-10 shrink-0 text-right text-sm tabular-nums text-muted-foreground">
             {percent}%
           </span>
         </div>
         <div className="mt-6 border-t border-border pt-6">
-          <Activity active={active} />
-          {finalising && (
-            <div className="mt-6 animate-in duration-700 fade-in-0">
-              <ReportSkeleton />
-            </div>
-          )}
+          <Activity active={active} finished={finished} total={job.documents.length} />
         </div>
       </div>
       <FileList job={job} showProgress={false} showSummaries />

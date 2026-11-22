@@ -36,8 +36,8 @@ _MESSAGES = {
 
 
 _PROCESSING_MESSAGES = {
-    "step_timeout": "The step timed out.",
-    "step_failed": "The step failed.",
+    "step_timeout": "This took longer than expected. Please try again.",
+    "step_failed": "Something went wrong on our side. Please try again.",
     "unreadable_document": "The document could not be read.",
 }
 

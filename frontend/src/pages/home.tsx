@@ -159,6 +159,25 @@ export function HomePage() {
     }
   }
 
+  function removeJob(id: string) {
+    setIds((current) => {
+      const next = current.filter((item) => item !== id);
+      writeJobIds(next);
+      return next;
+    });
+    queryClient.removeQueries({ queryKey: jobKey(id) });
+    if (id === activeId) {
+      newTask();
+    }
+  }
+
+  function clearAll() {
+    ids.forEach((id) => queryClient.removeQueries({ queryKey: jobKey(id) }));
+    setIds([]);
+    writeJobIds([]);
+    newTask();
+  }
+
   function remember(id: string) {
     setIds((current) => {
       const next = [id, ...current.filter((item) => item !== id)];
@@ -291,6 +310,8 @@ export function HomePage() {
         }))}
         onToggle={toggleSidebar}
         onNewTask={newTask}
+        onDelete={removeJob}
+        onClearAll={clearAll}
         onOpen={(id) => {
           setMissing(false);
           setHeld(null);

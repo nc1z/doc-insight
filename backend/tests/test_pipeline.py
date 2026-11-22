@@ -300,7 +300,7 @@ async def _invalid_output(database_url: str) -> None:
         assert body["documents"][0]["status"] == "failed"
         assert body["documents"][0]["error"] == {
             "code": "step_failed",
-            "message": "The step failed.",
+            "message": "Something went wrong on our side. Please try again.",
             "details": None,
         }
         assert body["report"] is None

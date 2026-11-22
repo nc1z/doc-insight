@@ -144,7 +144,7 @@ async def run_consolidation(repository: JobRepository, job_id: UUID) -> None:
     except StepFailure as exc:
         await _fail_consolidation(repository, job_id, exc.code)
         return
-    except (TimeoutError, ModelRequestTimeout):
+    except TimeoutError, ModelRequestTimeout:
         await _fail_consolidation(repository, job_id, "step_timeout")
         return
     except Exception:

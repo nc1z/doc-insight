@@ -1,6 +1,21 @@
-import { FileText, PanelLeftClose, SquarePen } from 'lucide-react';
+import { Ellipsis, FileText, PanelLeftClose, SquarePen, Trash2 } from 'lucide-react';
+import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { cn } from 'cn';
 
 export type HistoryItem = {
@@ -58,6 +73,8 @@ export function Sidebar({
   onToggle,
   onNewTask,
   onOpen,
+  onDelete,
+  onClearAll,
 }: {
   open: boolean;
   items: HistoryItem[];
@@ -65,7 +82,12 @@ export function Sidebar({
   onToggle: () => void;
   onNewTask: () => void;
   onOpen: (id: string) => void;
+  onDelete: (id: string) => void;
+  onClearAll: () => void;
 }) {
+  const [confirmingClear, setConfirmingClear] = useState(false);
+  // Captured when the dialog opens, so the text doesn't change while it fades out.
+  const [clearCount, setClearCount] = useState(0);
   return (
     <>
       {/* In-flow spacer on desktop so the main column centres in the space that is left. */}
@@ -134,12 +156,12 @@ export function Sidebar({
           ) : (
             <ul className="space-y-0.5">
               {items.map((item) => (
-                <li key={item.id}>
+                <li key={item.id} className="group/item relative">
                   <button
                     type="button"
                     aria-current={item.id === activeId ? 'page' : undefined}
                     className={cn(
-                      'group flex w-full cursor-pointer items-start gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm leading-5 text-sidebar-foreground/80 transition-colors outline-none hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-ring/30',
+                      'flex w-full cursor-pointer items-start gap-2.5 rounded-lg py-2 pr-9 pl-2.5 text-left text-sm leading-5 text-sidebar-foreground/80 transition-colors outline-none hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-ring/30',
                       item.id === activeId &&
                         'bg-sidebar-accent font-medium text-sidebar-accent-foreground',
                     )}
@@ -149,21 +171,85 @@ export function Sidebar({
                       aria-hidden
                       className="mt-0.5 size-4 shrink-0 text-muted-foreground"
                     />
-                    <span className="min-w-0 flex-1 line-clamp-2 break-words">{item.label}</span>
-                    <StatusDot status={item.status} />
+                    <span className="line-clamp-2 min-w-0 flex-1 break-words">{item.label}</span>
                   </button>
+                  <span className="pointer-events-none absolute top-0 right-0 flex h-9 w-9 items-center justify-center group-focus-within/item:opacity-0 group-hover/item:opacity-0 [@media(hover:none)]:hidden">
+                    <StatusDot status={item.status} />
+                  </span>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label="Analysis options"
+                        className="absolute top-1 right-1 size-7 text-muted-foreground opacity-0 transition-opacity group-focus-within/item:opacity-100 group-hover/item:opacity-100 data-[state=open]:bg-sidebar-accent data-[state=open]:opacity-100 data-[state=open]:text-foreground hover:bg-background/70 [@media(hover:none)]:opacity-100"
+                      >
+                        <Ellipsis />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent>
+                      <DropdownMenuItem variant="destructive" onSelect={() => onDelete(item.id)}>
+                        <Trash2 />
+                        Remove from history
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </li>
               ))}
             </ul>
           )}
         </nav>
 
-        <div className="border-t border-sidebar-border px-5 py-3.5">
-          <p className="text-xs leading-5 text-muted-foreground">
+        <div className="space-y-2 border-t border-sidebar-border px-3 py-3">
+          {items.length > 0 && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="w-full justify-start gap-2 text-muted-foreground hover:text-destructive"
+              onClick={() => {
+                setClearCount(items.length);
+                setConfirmingClear(true);
+              }}
+            >
+              <Trash2 data-icon="inline-start" />
+              Clear all
+            </Button>
+          )}
+          <p className="px-2.5 text-xs leading-5 text-muted-foreground">
             Recent analyses are kept in this browser.
           </p>
         </div>
       </aside>
+      <Dialog open={confirmingClear} onOpenChange={setConfirmingClear}>
+        <DialogContent showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle className="text-lg font-semibold tracking-tight">
+              Clear all recent analyses?
+            </DialogTitle>
+            <DialogDescription>
+              This removes {clearCount === 1 ? 'the analysis' : `all ${clearCount} analyses`} from
+              this browser. You won&apos;t be able to reopen {clearCount === 1 ? 'it' : 'them'} from
+              here.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setConfirmingClear(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                setConfirmingClear(false);
+                onClearAll();
+              }}
+            >
+              Clear all
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

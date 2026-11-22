@@ -186,12 +186,12 @@
   }
 }
 
-@keyframes shimmer {
+@keyframes sheen {
   from {
-    background-position: 200% 0;
+    background-position: 100% 0;
   }
   to {
-    background-position: -200% 0;
+    background-position: 0 0;
   }
 }
 
@@ -207,18 +207,19 @@
 }
 
 @layer utilities {
-  .shimmer {
+  .sheen {
+    background-color: oklch(0.94 0.006 260);
     background-image: linear-gradient(
       90deg,
-      var(--muted) 0%,
-      oklch(0.985 0.003 260) 45%,
-      var(--muted) 90%
+      oklch(0.94 0.006 260) 0%,
+      oklch(0.985 0.003 260) 50%,
+      oklch(0.94 0.006 260) 100%
     );
     background-size: 200% 100%;
-    animation: shimmer 2.2s linear infinite;
+    animation: sheen 2.2s linear infinite;
   }
   /* Indeterminate sheen on a progress bar that is waiting on one last step. */
-  .shimmer-bar [data-slot='progress-indicator'] {
+  .sheen-bar [data-slot='progress-indicator'] {
     background-image: linear-gradient(
       90deg,
       var(--primary) 0%,
@@ -226,7 +227,7 @@
       var(--primary) 100%
     );
     background-size: 200% 100%;
-    animation: shimmer 1.8s linear infinite;
+    animation: sheen 1.8s linear infinite;
   }
   /* Children rise in one after another when a screen first appears. */
   .reveal > * {

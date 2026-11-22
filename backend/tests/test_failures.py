@@ -253,7 +253,10 @@ async def _dead_document_task(database_url: str) -> None:
             body = client.get(f"/jobs/{job_id}").json()
         assert body["status"] == "awaiting_input"
         assert body["documents"][0]["status"] == "failed"
-        assert body["documents"][0]["error"]["message"] == "The step failed."
+        assert (
+            body["documents"][0]["error"]["message"]
+            == "Something went wrong on our side. Please try again."
+        )
     finally:
         await _clear(engine)
         await engine.dispose()
@@ -304,7 +307,10 @@ async def _stale_worker(database_url: str) -> None:
             await _reclaim(engine, database_url)
             body = client.get(f"/jobs/{job_id}").json()
         assert body["status"] == "awaiting_input"
-        assert body["documents"][0]["error"]["message"] == "The step failed."
+        assert (
+            body["documents"][0]["error"]["message"]
+            == "Something went wrong on our side. Please try again."
+        )
     finally:
         await _clear(engine)
         await engine.dispose()
@@ -328,7 +334,7 @@ async def _dead_consolidation(database_url: str) -> None:
             body = client.get(f"/jobs/{job_id}").json()
         assert body["status"] == "failed"
         assert body["error"]["code"] == "step_failed"
-        assert body["error"]["message"] == "The step failed."
+        assert body["error"]["message"] == "Something went wrong on our side. Please try again."
     finally:
         await _clear(engine)
         await engine.dispose()
@@ -433,7 +439,6 @@ async def _clear(engine: AsyncEngine) -> None:
     async with engine.begin() as connection:
         await connection.execute(
             text(
-                "TRUNCATE jobs, procrastinate_jobs, procrastinate_workers "
-                "RESTART IDENTITY CASCADE"
+                "TRUNCATE jobs, procrastinate_jobs, procrastinate_workers RESTART IDENTITY CASCADE"
             )
         )

@@ -83,7 +83,7 @@ test('a finished upload opens again from the sidebar', async ({ page }) => {
   await expect(page.getByRole('main').getByText('Mock report of desk-note.pdf.')).toBeVisible();
 
   await page.reload();
-  await page.getByRole('button', { name: 'Mock report of desk-note.pdf.' }).click();
+  await page.getByRole('button', { name: 'Mock report of desk-note.pdf.', exact: true }).click();
   await expect(page.getByRole('tab', { name: 'Overview' })).toBeVisible();
   await page.getByRole('tab', { name: 'desk-note.pdf' }).click();
   await expect(page.getByText('Mock summary of desk-note.pdf.')).toBeVisible();

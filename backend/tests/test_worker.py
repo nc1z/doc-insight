@@ -178,7 +178,7 @@ async def _consolidation_timeout(database_url: str) -> None:
         error = _job_view(failed).error
         assert error is not None
         assert error.code == "step_timeout"
-        assert error.message == "The step timed out."
+        assert error.message == "This took longer than expected. Please try again."
     finally:
         bind_pipeline(None)
         await _clear(engine)
@@ -222,7 +222,7 @@ async def _consolidation_stops(database_url: str) -> None:
         error = _job_view(failed).error
         assert error is not None
         assert error.code == "step_failed"
-        assert error.message == "The step failed."
+        assert error.message == "Something went wrong on our side. Please try again."
     finally:
         bind_jobs(None)
         await _clear(engine)
