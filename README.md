@@ -19,7 +19,7 @@ You can try it with the sample PDFs in [samples/](samples/):
 - [flows/](samples/flows/): one set that works, and one set with a file the upload rejects.
 - [adversarial/](samples/adversarial/): documents that get flagged.
 - [invalid/](samples/invalid/): files the upload rejects.
-- [output/](samples/output/): example summaries made from the `flows/` files, using Doc Insight.
+- [Example report](samples/output/doc-insight-86d5460f.pdf): the PDF Doc Insight wrote from the four files in [happy-path/](samples/flows/happy-path/).
 
 ## Design & Planning
 
@@ -252,7 +252,8 @@ Stop it with `docker compose down`. Your data stays in Docker volumes. Add `-v` 
 <img width="1462" height="825" alt="image" src="https://github.com/user-attachments/assets/a191eb61-36c6-4359-9bff-74f5871a878b" />
 
 ### 1. Happy Path - PDFs with text and images
-[ai-competitor-landscape.pdf](samples/flows/happy-path/ai-competitor-landscape.pdf) contains images which was successfully analysed and summarized, alongside a few other important documents.
+
+[ai-competitor-landscape.pdf](samples/flows/happy-path/ai-competitor-landscape.pdf) contains images which was successfully analysed and summarized, alongside a few other important documents. The report from that run is [doc-insight-86d5460f.pdf](samples/output/doc-insight-86d5460f.pdf).
 
 https://github.com/user-attachments/assets/52b37ad0-24f3-4660-8b0d-313ead6c0233
 
