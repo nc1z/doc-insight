@@ -28,7 +28,7 @@ A different Node version only produces a warning, but use the pinned one to matc
 
 Schema changes live in [`backend/alembic/versions/`](backend/alembic/versions/). Alembic reads `DATABASE_URL` from the repo-root `.env`.
 
-The API container applies pending migrations when it starts. [`backend/docker-entrypoint.sh`](backend/docker-entrypoint.sh) runs `alembic upgrade head` and then starts the server, so `docker compose up -d` is enough. After adding a migration, rebuild the backend so the new file is in the image:
+The API and worker containers apply pending migrations when they start. [`backend/docker-entrypoint.sh`](backend/docker-entrypoint.sh) runs `alembic upgrade head` and then the container command. The API command starts the server. The worker command is `python -m app.worker`. `docker compose up -d` is enough. After adding a migration, rebuild the image so the new file is in it:
 
 ```bash
 docker compose up -d --build backend

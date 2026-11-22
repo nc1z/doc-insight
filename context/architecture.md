@@ -13,14 +13,16 @@ flowchart LR
     Nginx --> API
 
     subgraph Backend
-        API[API<br/>FastAPI] --> DB[(Postgres<br/>jobs, results, queue)]
+        API[API container<br/>FastAPI] --> DB[(Postgres<br/>jobs, results, queue)]
         API --> Files[(MinIO<br/>S3 API)]
-        Worker[Worker<br/>processing pipeline] --> DB
+        Worker[Worker container<br/>same image, pipeline] --> DB
         Worker --> Files
     end
 
     Worker --> LLM{{LLM provider}}
 ```
+
+The API and the worker are separate containers from the same image. The API container runs the HTTP server. The worker container runs `python -m app.worker` and claims queue tasks. Processing capacity is the worker: it reads files from MinIO and writes status back to Postgres, so a long job stays off the process that serves uploads and polls. Extra worker containers add processing capacity without extra API containers. The two containers meet only through Postgres and MinIO.
 
 ## System components (production AWS)
 

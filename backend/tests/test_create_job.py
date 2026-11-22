@@ -10,6 +10,16 @@ from app.core.config import Settings
 from app.core.db import create_engine
 from app.main import create_app
 
+_TASKS_FOR_JOB = text(
+    """
+    SELECT count(*) FROM procrastinate_jobs
+    WHERE args->>'document_id' IN (
+        SELECT id::text FROM documents WHERE job_id = :id
+    )
+    OR (task_name = 'consolidate_job' AND args->>'job_id' = CAST(:id AS text))
+    """
+)
+
 
 class RecordingStorage:
     def __init__(self) -> None:
@@ -153,7 +163,10 @@ async def _assert_queued(database_url: str, job_id: str) -> None:
             queued = await connection.scalar(
                 text(
                     "SELECT count(*) FROM procrastinate_jobs "
-                    "WHERE task_name = 'process_job' AND args->>'job_id' = :id"
+                    "WHERE task_name = 'process_document' "
+                    "AND args->>'document_id' IN ("
+                    "SELECT id::text FROM documents WHERE job_id = :id"
+                    ")"
                 ),
                 {"id": job_id},
             )
@@ -182,10 +195,7 @@ async def _assert_waiting(database_url: str, job_id: str) -> None:
                     {"id": job_id},
                 )
             ).all()
-            queued = await connection.scalar(
-                text("SELECT count(*) FROM procrastinate_jobs WHERE args->>'job_id' = :id"),
-                {"id": job_id},
-            )
+            queued = await connection.scalar(_TASKS_FOR_JOB, {"id": job_id})
         assert status == "awaiting_input"
         assert rows == [
             ("notes.pdf", "failed", "unsupported_type", True),

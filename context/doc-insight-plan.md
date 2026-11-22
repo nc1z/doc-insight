@@ -234,9 +234,11 @@ Creating or confirming a job enqueues one task per stored document in the same t
 
 ### 3B. Worker Process
 
-- [ ] Add `app/worker/` with the worker entry point, using the queue library and the same adapter factory as the API. It runs from the same image with a different command.
-- [ ] Add a `worker` service to `docker-compose.yml` using the same MinIO service and database.
-- [ ] Make every step idempotent: store each step's status, and skip steps already completed on retry.
+- [x] Add `app/worker/` with the worker entry point, using the queue library and the same adapter factory as the API. It runs from the same image with a different command.
+- [x] Add a `worker` service to `docker-compose.yml` using the same MinIO service and database.
+- [x] Make every step idempotent: store each step's status, and skip steps already completed on retry.
+
+`python -m app.worker` runs in the same image as the API. Create and confirm insert one `process_document` task per stored document. The task stores the document status after each step, and a retry continues from that status. The task that finds every stored document finished inserts `consolidate_job` on the same connection. Consolidation marks the job `succeeded`. The work inside each step is still empty.
 
 ### 3C. Pipeline Skeleton
 

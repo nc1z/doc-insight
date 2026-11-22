@@ -50,19 +50,22 @@ def _repository(database_url: str) -> PostgresJobRepository:
 async def _commits_both(database_url: str) -> None:
     engine = create_engine(database_url)
     repository = PostgresJobRepository(create_session_factory(engine), build_queue(database_url))
+    second = NewDocument(filename="extra.pdf", storage_key="jobs/extra.pdf", page_count=1)
     try:
         await _clear(engine)
-        job = await repository.create_and_enqueue([_document()])
+        job = await repository.create_and_enqueue([_document(), second])
         async with engine.connect() as connection:
-            queued = await connection.scalar(
-                text(
-                    "SELECT args->>'job_id' FROM procrastinate_jobs "
-                    "WHERE task_name = 'process_job' AND status = 'todo'"
+            queued = (
+                await connection.scalars(
+                    text(
+                        "SELECT args->>'document_id' FROM procrastinate_jobs "
+                        "WHERE task_name = 'process_document' AND status = 'todo'"
+                    )
                 )
-            )
+            ).all()
         assert job.status is JobStatus.QUEUED
-        assert [item.filename for item in job.documents] == ["notes.pdf"]
-        assert queued == str(job.id)
+        assert [item.filename for item in job.documents] == ["notes.pdf", "extra.pdf"]
+        assert set(queued) == {str(item.id) for item in job.documents}
     finally:
         await _clear(engine)
         await engine.dispose()
@@ -72,10 +75,10 @@ async def _rolls_back(database_url: str) -> None:
     engine = create_engine(database_url)
     repository = PostgresJobRepository(create_session_factory(engine), build_queue(database_url))
 
-    async def fail(_connection: object, _job_id: object) -> None:
+    async def fail(_connection: object, _documents: object) -> None:
         raise RuntimeError("queue down")
 
-    repository._enqueue = fail  # type: ignore[method-assign]
+    repository._enqueue_documents = fail  # type: ignore[method-assign]
     try:
         await _clear(engine)
         with pytest.raises(RuntimeError, match="queue down"):

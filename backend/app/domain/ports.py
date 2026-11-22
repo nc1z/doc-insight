@@ -5,6 +5,7 @@ from typing import Protocol
 from uuid import UUID
 
 from app.domain.models import Job
+from app.domain.status import DocumentStatus, JobStatus
 
 
 @dataclass(frozen=True)
@@ -25,6 +26,14 @@ class NewRejection:
 class StoredObject:
     key: str
     last_modified: datetime
+
+
+@dataclass(frozen=True)
+class DocumentProgress:
+    status: DocumentStatus
+    job_status: JobStatus
+    excluded: bool
+    stored: bool
 
 
 class JobRepository(Protocol):
@@ -52,6 +61,17 @@ class JobRepository(Protocol):
     async def expire_awaiting(self, older_than: datetime) -> Sequence[str]: ...
 
     async def storage_keys(self) -> set[str]: ...
+
+    async def document_progress(self, document_id: UUID) -> DocumentProgress | None: ...
+
+    async def complete_step(
+        self,
+        document_id: UUID,
+        expected: DocumentStatus,
+        target: DocumentStatus,
+    ) -> bool: ...
+
+    async def consolidate(self, job_id: UUID) -> bool: ...
 
 
 class FileStorage(Protocol):

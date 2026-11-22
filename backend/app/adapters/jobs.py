@@ -8,16 +8,16 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
-from app.adapters.queue import PROCESS_JOB
+from app.adapters.queue import CONSOLIDATE_JOB, PROCESS_DOCUMENT
 from app.core.errors import DomainError
 from app.domain.job_state import transition
 from app.domain.models import Document, Job
-from app.domain.ports import NewDocument, NewRejection
+from app.domain.ports import DocumentProgress, NewDocument, NewRejection
 from app.domain.status import DocumentStatus, JobStatus
 
 
 class PostgresJobRepository:
-    """Persists jobs. Confirm enqueues the worker task in the same transaction."""
+    """Persists jobs. Create and confirm enqueue one document task per stored file."""
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession], queue: App) -> None:
         self._sessions = session_factory
@@ -33,7 +33,7 @@ class PostgresJobRepository:
             )
             session.add(job)
             await session.flush()
-            await self._enqueue(await _driver_connection(session), job.id)
+            await self._enqueue_documents(await _driver_connection(session), job.documents)
         return job
 
     async def create_awaiting_input(
@@ -104,7 +104,7 @@ class PostgresJobRepository:
                 if document.storage_key is None and not document.excluded:
                     document.excluded = True
             await session.flush()
-            await self._enqueue(await _driver_connection(session), job.id)
+            await self._enqueue_documents(await _driver_connection(session), job.documents)
         return job
 
     async def cancel(self, job_id: UUID) -> Job | None:
@@ -135,6 +135,53 @@ class PostgresJobRepository:
             await session.flush()
         return keys
 
+    async def document_progress(self, document_id: UUID) -> DocumentProgress | None:
+        async with self._sessions() as session:
+            document = await session.get(Document, document_id)
+            if document is None:
+                return None
+            job = await session.get(Job, document.job_id)
+            if job is None:
+                return None
+            return DocumentProgress(
+                status=document.status,
+                job_status=job.status,
+                excluded=document.excluded,
+                stored=document.storage_key is not None,
+            )
+
+    async def complete_step(
+        self,
+        document_id: UUID,
+        expected: DocumentStatus,
+        target: DocumentStatus,
+    ) -> bool:
+        async with self._sessions() as session, session.begin():
+            located = await session.get(Document, document_id)
+            if located is None:
+                return False
+            job = await self._locked(session, located.job_id)
+            if job is None or job.status not in (JobStatus.QUEUED, JobStatus.RUNNING):
+                return False
+            document = next(item for item in job.documents if item.id == document_id)
+            if document.excluded or document.storage_key is None or document.status is not expected:
+                return False
+            if job.status is JobStatus.QUEUED:
+                job.status = transition(job.status, JobStatus.RUNNING)
+            document.status = target
+            if target is DocumentStatus.SUCCEEDED and _unfinished_stored(job) == 0:
+                job.status = transition(job.status, JobStatus.CONSOLIDATING)
+                await self._enqueue_consolidation(await _driver_connection(session), job.id)
+            return True
+
+    async def consolidate(self, job_id: UUID) -> bool:
+        async with self._sessions() as session, session.begin():
+            job = await self._locked(session, job_id)
+            if job is None or job.status is not JobStatus.CONSOLIDATING:
+                return False
+            job.status = transition(job.status, JobStatus.SUCCEEDED)
+            return True
+
     async def storage_keys(self) -> set[str]:
         async with self._sessions() as session:
             rows = await session.scalars(
@@ -150,9 +197,34 @@ class PostgresJobRepository:
             with_for_update=True,
         )
 
-    async def _enqueue(self, connection: psycopg.AsyncConnection, job_id: UUID) -> None:
-        task = self._queue.tasks[PROCESS_JOB]
+    async def _enqueue_documents(
+        self,
+        connection: psycopg.AsyncConnection,
+        documents: Sequence[Document],
+    ) -> None:
+        task = self._queue.tasks[PROCESS_DOCUMENT]
+        for document in documents:
+            if document.storage_key is None or document.excluded:
+                continue
+            await task.configure(connection=connection).defer_async(document_id=str(document.id))
+
+    async def _enqueue_consolidation(
+        self,
+        connection: psycopg.AsyncConnection,
+        job_id: UUID,
+    ) -> None:
+        task = self._queue.tasks[CONSOLIDATE_JOB]
         await task.configure(connection=connection).defer_async(job_id=str(job_id))
+
+
+def _unfinished_stored(job: Job) -> int:
+    return sum(
+        1
+        for document in job.documents
+        if document.storage_key is not None
+        and not document.excluded
+        and document.status not in (DocumentStatus.SUCCEEDED, DocumentStatus.FAILED)
+    )
 
 
 def _rejections_by_name(job: Job) -> dict[str, Document]:
