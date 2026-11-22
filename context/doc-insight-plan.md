@@ -470,34 +470,40 @@ Solves flow step 8: progress, report, and error states.
 
 ### 9A. Progress
 
-- [ ] Poll `GET /jobs/{id}` every 1–2 seconds only while the job is `queued`, `running`, or `consolidating`.
-- [ ] Show a progress bar, each document's state, and flag warnings as soon as they appear.
-- [ ] Decide whether document tabs fill in during progress or the report appears at the end, and record it.
+- [x] Poll `GET /jobs/{id}` every 1–2 seconds only while the job is `queued`, `running`, or `consolidating`.
+- [x] Show a progress bar, each document's state, and flag warnings as soon as they appear.
+- [x] Decide whether document tabs fill in during progress or the report appears at the end, and record it.
+
+The page shows progress until the job succeeds. `pollInterval` in `frontend/src/job/poll.ts` waits 1.5 seconds only for `queued`, `running`, and `consolidating`.
 
 ### 9B. Report
 
-- [ ] Transition smoothly from progress into the report.
-- [ ] Overview tab with the consolidated report and excluded files; one tab per document with key details and citations.
+- [x] Transition smoothly from progress into the report.
+- [x] Overview tab with the consolidated report and excluded files; one tab per document with key details and citations.
 
 ### 9C. States and URL
 
-- [ ] Show `failed`, `cancelled`, and `expired` with the reason and a link back to upload; show `404` as "job not found".
-- [ ] Show a global error when the backend is unreachable.
-- [ ] The job stays on the home page.
+- [x] Show `failed`, `cancelled`, and `expired` with the reason and a link back to upload; show `404` as "job not found".
+- [x] Show a global error when the backend is unreachable.
+- [x] The job stays on the home page.
 
 ### 9D. Past Summaries
 
-- [ ] Store created job IDs in local storage and list them on the landing page; drop jobs that return `404` or `expired`.
-- [ ] Decide placement (left sidebar or below the upload) and record it.
+- [x] Store created job IDs in local storage and list them on the landing page; drop jobs that return `404` or `expired`.
+- [x] Decide placement (left sidebar or below the upload) and record it.
+
+Past summaries are a left sidebar (`frontend/src/shell/sidebar.tsx`). The open or closed choice is stored in local storage.
 
 ### 9E. Tests and Manual Verification
 
-- [ ] Playwright smoke tests: upload samples in mock mode, reach the report on the home page, refresh, and open a past summary.
+- [x] Playwright smoke tests: upload samples in mock mode, reach the report on the home page, refresh, and open a past summary.
 - [ ] Agentic verification: an agent drives the running UI through each upload case, then through progress, report tabs, flags, and failure states, and reports what it sees.
 
 ### 9F. Learning Checkpoint
 
-- [ ] Learning: explain the code changes in small chunks with file names, short snippets, layman explanations, and how polling and URL state make the async flow feel fast.
+- [x] Learning: explain the code changes in small chunks with file names, short snippets, layman explanations, and how polling keeps the page in step with the job.
+
+The home page is still one screen (`frontend/src/pages/home.tsx`). A hamburger at the top left opens a sidebar, and that choice stays in local storage (`frontend/src/shell/storage.ts`). New task, with a compose icon, clears the page back to the drop zone. Each created job id is stored in the same place and listed in the sidebar. The page polls `GET /jobs/{id}` every 1.5 seconds only while the job is queued, running, or consolidating (`frontend/src/job/poll.ts`). The file list shows a progress bar, each file's state, a warning when a file is flagged, and a retry icon when a file has failed. When the job succeeds, that list is replaced by an overview and one tab per file (`frontend/src/report/view.tsx`). A missing job says it was not found and leaves the sidebar. An expired job does the same. If the server cannot be reached, a banner says so. The job stays on `/`. The Playwright report test uploads a sample and then feeds the page a finished job, so the overview, the file tab, a refresh, and opening that task from the sidebar can be checked without waiting on the model.
 
 Suggested commit message: `feat(frontend): add progress, report, and past summaries`
 

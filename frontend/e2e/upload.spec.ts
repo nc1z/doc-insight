@@ -9,28 +9,28 @@ const notes = path.join(samples, 'invalid/notes.pdf');
 
 test('a valid upload shows each file', async ({ page }) => {
   await page.goto('/');
-  await page.getByLabel('Upload PDFs').setInputFiles(deskNote);
+  await page.getByLabel('Upload documents').setInputFiles(deskNote);
 
-  await expect(page.getByText('Reading the files.')).toBeVisible();
-  await expect(page.getByText('desk-note.pdf')).toBeVisible();
-  await expect(page.getByLabel('Upload PDFs')).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Analysing your documents' })).toBeVisible();
+  await expect(page.getByRole('main').getByText('desk-note.pdf')).toBeVisible();
+  await expect(page.getByLabel('Upload documents')).toHaveCount(0);
 });
 
 test('a mixed upload can continue, re-upload, or cancel', async ({ page }) => {
   await page.goto('/');
-  await page.getByLabel('Upload PDFs').setInputFiles([deskNote, notes]);
+  await page.getByLabel('Upload documents').setInputFiles([deskNote, notes]);
 
   await expect(page.getByText('notes.pdf')).toBeVisible();
   await expect(page.getByText('The file is not a PDF.')).toBeVisible();
 
   await page.getByRole('button', { name: 'Continue without them' }).click();
-  await expect(page.getByText('Reading the files.')).toBeVisible();
-  await expect(page.getByText('desk-note.pdf')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Analysing your documents' })).toBeVisible();
+  await expect(page.getByRole('main').getByText('desk-note.pdf')).toBeVisible();
 });
 
 test('re-upload adds a file and cancel returns to the drop zone', async ({ page }) => {
   await page.goto('/');
-  await page.getByLabel('Upload PDFs').setInputFiles([deskNote, notes]);
+  await page.getByLabel('Upload documents').setInputFiles([deskNote, notes]);
   await expect(page.getByText('The file is not a PDF.')).toBeVisible();
 
   await page.getByLabel('Re-upload').setInputFiles(path.join(samples, 'broker-flash.pdf'));
@@ -39,5 +39,5 @@ test('re-upload adds a file and cancel returns to the drop zone', async ({ page 
 
   await page.getByRole('button', { name: 'Cancel' }).click();
   await expect(page.getByText('Cancelled.')).toBeVisible();
-  await expect(page.getByLabel('Upload PDFs')).toBeVisible();
+  await expect(page.getByLabel('Upload documents')).toBeVisible();
 });

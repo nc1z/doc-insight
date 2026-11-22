@@ -19,7 +19,7 @@ export function checkFiles(files: File[]): { accepted: File[]; notices: FileNoti
   for (const file of files) {
     const pdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
     if (!pdf) {
-      notices.push({ filename: file.name, message: 'The file is not a PDF.' });
+      notices.push({ filename: file.name, message: "This file type isn't supported." });
     } else if (file.size > MAX_FILE_BYTES) {
       notices.push({ filename: file.name, message: 'The file is over the size limit.' });
     } else {

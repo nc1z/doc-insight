@@ -436,7 +436,7 @@ flowchart LR
 ### Landing page
 
 - A title, a one- or two-line instruction, and a file upload input (drag-and-drop and file picker).
-- Past summaries are listed beside the upload (left sidebar) or below it.
+- Past summaries are listed in a left sidebar. A hamburger at the top left opens and closes it, and the browser remembers that choice.
 
 ### Progress
 
@@ -445,7 +445,7 @@ flowchart LR
 
 ### Report
 
-- When the job finishes, the page transitions smoothly from progress into the report.
+- While the job is queued, running, or consolidating, the page shows progress. When the job succeeds, that progress is replaced by the report.
 - The report is concise and split into tabs:
   - **Overview**: the consolidated report, including any files the analyst chose to exclude.
   - **One tab per document**: that document's key details, with citations.
@@ -462,7 +462,6 @@ flowchart LR
 
 ### UI open decisions
 
-- **Past summaries placement**: left sidebar or below the upload.
 - **Download format**: Markdown, PDF, or both.
 
 ## Enhancements

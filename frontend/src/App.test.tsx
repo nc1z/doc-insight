@@ -1,7 +1,17 @@
-import { fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { HomePage } from '@/pages/home';
+import { createQueryClient } from '@/query';
+
+function renderHome() {
+  return render(
+    <QueryClientProvider client={createQueryClient()}>
+      <HomePage />
+    </QueryClientProvider>,
+  );
+}
 
 const queuedJob = {
   id: 'job-1',
@@ -25,42 +35,88 @@ const queuedJob = {
 };
 
 describe('home page', () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
+  beforeEach(() => {
+    localStorage.clear();
   });
 
-  it('keeps a file that is not a PDF on the page', async () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    localStorage.clear();
+  });
+
+  it('keeps an unsupported file on the page', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
-    render(<HomePage />);
+    renderHome();
 
-    fireEvent.change(screen.getByLabelText('Upload PDFs'), {
+    fireEvent.change(screen.getByLabelText('Upload documents'), {
       target: { files: [new File(['hello'], 'notes.txt', { type: 'text/plain' })] },
     });
 
-    expect(await screen.findByText('notes.txt: The file is not a PDF.')).toBeInTheDocument();
+    expect(
+      await screen.findByText("notes.txt: This file type isn't supported."),
+    ).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('starts a job when the dropped files are PDFs', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(Response.json({ id: 'job-1', status: 'queued' }, { status: 202 }))
-      .mockResolvedValueOnce(Response.json(queuedJob));
+  it('starts a job when the dropped files are supported', async () => {
+    const fetchMock = vi.fn((_: string, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        return Promise.resolve(Response.json({ id: 'job-1', status: 'queued' }, { status: 202 }));
+      }
+      return Promise.resolve(Response.json(queuedJob));
+    });
     vi.stubGlobal('fetch', fetchMock);
-    render(<HomePage />);
+    renderHome();
 
-    fireEvent.change(screen.getByLabelText('Upload PDFs'), {
+    fireEvent.change(screen.getByLabelText('Upload documents'), {
       target: { files: [new File(['%PDF'], 'desk-note.pdf', { type: 'application/pdf' })] },
     });
 
-    expect(await screen.findByText('desk-note.pdf')).toBeInTheDocument();
+    expect(await screen.findAllByText('desk-note.pdf')).toHaveLength(2);
     expect(screen.getByText('Queued')).toBeInTheDocument();
-    expect(screen.queryByLabelText('Upload PDFs')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Upload documents')).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
       '/api/jobs',
       expect.objectContaining({ method: 'POST' }),
     );
+    expect(JSON.parse(localStorage.getItem('doc-insight.jobs') ?? '[]')).toEqual(['job-1']);
+  });
+
+  it('remembers when the sidebar is closed', () => {
+    renderHome();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close sidebar' }));
+
+    expect(screen.getByRole('button', { name: 'Open sidebar' })).toBeInTheDocument();
+    expect(localStorage.getItem('doc-insight.sidebar')).toBe('closed');
+  });
+
+  it('drops a missing task and says it was not found', async () => {
+    localStorage.setItem('doc-insight.jobs', JSON.stringify(['missing']));
+    let respond: (response: Response) => void = () => undefined;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        () =>
+          new Promise<Response>((resolve) => {
+            respond = resolve;
+          }),
+      ),
+    );
+    renderHome();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Task' }));
+    respond(
+      Response.json({ code: 'not_found', message: 'The job was not found.' }, { status: 404 }),
+    );
+
+    expect(
+      await screen.findByText("We couldn't find that analysis. It may have been removed."),
+    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(JSON.parse(localStorage.getItem('doc-insight.jobs') ?? '[]')).toEqual([]);
+    });
   });
 });

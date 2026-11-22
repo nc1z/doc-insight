@@ -1,11 +1,15 @@
 import { useState } from 'react';
-import { Upload } from 'lucide-react';
+import { FileUp } from 'lucide-react';
 
 import { cn } from 'cn';
+
+import { MAX_FILE_BYTES, MAX_FILE_COUNT } from './files';
 
 type DropZoneProps = {
   onFiles: (files: File[]) => void;
 };
+
+const MAX_MB = Math.round(MAX_FILE_BYTES / (1024 * 1024));
 
 export function DropZone({ onFiles }: DropZoneProps) {
   const [over, setOver] = useState(false);
@@ -13,8 +17,8 @@ export function DropZone({ onFiles }: DropZoneProps) {
   return (
     <label
       className={cn(
-        'mt-12 flex min-h-52 w-full cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border bg-white px-6 text-muted-foreground shadow-sm transition-colors',
-        over && 'border-foreground text-foreground',
+        'group relative flex w-full cursor-pointer flex-col items-center justify-center gap-5 rounded-2xl border border-dashed border-input bg-card/80 px-6 py-12 text-center shadow-card transition-all duration-200 focus-within:ring-3 focus-within:ring-ring/25 hover:border-foreground/25 hover:bg-card hover:shadow-card-hover',
+        over && 'border-foreground/40 bg-card shadow-card-hover ring-4 ring-ring/10',
       )}
       onDragOver={(event) => {
         event.preventDefault();
@@ -30,10 +34,25 @@ export function DropZone({ onFiles }: DropZoneProps) {
         }
       }}
     >
-      <Upload className="size-8" strokeWidth={1.75} aria-hidden />
-      <span className="text-base">Drop PDFs, or click to choose</span>
+      <span
+        aria-hidden
+        className={cn(
+          'grid size-12 place-items-center rounded-xl border border-border bg-secondary text-muted-foreground transition-all duration-200 group-hover:-translate-y-0.5 group-hover:text-foreground',
+          over && '-translate-y-1 text-foreground',
+        )}
+      >
+        <FileUp className="size-5" strokeWidth={1.6} />
+      </span>
+      <span className="space-y-1.5">
+        <span className="block text-base font-medium tracking-tight">
+          {over ? 'Release to upload' : 'Drop documents here, or click to browse'}
+        </span>
+        <span className="block text-sm text-muted-foreground">
+          Up to {MAX_FILE_COUNT} files, {MAX_MB} MB each
+        </span>
+      </span>
       <input
-        aria-label="Upload PDFs"
+        aria-label="Upload documents"
         className="sr-only"
         type="file"
         accept="application/pdf,.pdf"
