@@ -32,6 +32,8 @@ def test_document_summary_keeps_a_point_with_its_page_and_quote() -> None:
             "title": "Harbour Line",
             "inferred_type": "report",
             "summary": "The extension costs $420 million.",
+            "key_points": ["Cost is $420 million"],
+            "sections": [{"heading": "Cost", "paragraphs": ["The cost is $420 million."]}],
             "topics": ["light rail"],
             "entities": {
                 "people": [{"name": "Tomás Reyes"}],
@@ -74,6 +76,7 @@ def test_a_contradiction_holds_both_claims() -> None:
                 }
             ],
             "takeaways": ["Check the cost"],
+            "sections": [{"heading": "Cost", "paragraphs": ["The cost is $420 million."]}],
             "flagged_documents": [],
             "excluded_files": [],
         }
@@ -103,6 +106,7 @@ def test_one_claim_is_not_a_contradiction() -> None:
                     }
                 ],
                 "takeaways": ["Check the cost"],
+                "sections": [{"heading": "Cost", "paragraphs": ["The cost is $420 million."]}],
                 "flagged_documents": [],
                 "excluded_files": [],
             }
@@ -116,6 +120,8 @@ def test_an_unknown_document_type_is_rejected() -> None:
                 "title": "Note",
                 "inferred_type": "memo",
                 "summary": "A note.",
+                "key_points": ["Cost is $420 million"],
+                "sections": [{"heading": "Cost", "paragraphs": ["The cost is $420 million."]}],
                 "topics": [],
                 "notable_points": [],
             }

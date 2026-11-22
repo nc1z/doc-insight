@@ -53,6 +53,8 @@ class MockLLM:
                     "title": filename,
                     "inferred_type": fields.get("document_type", "other"),
                     "summary": f"Mock summary of {filename}.",
+                    "key_points": ["Mock key point"],
+                    "sections": [{"heading": "Mock heading", "paragraphs": ["Mock paragraph."]}],
                     "topics": ["mock"],
                     "entities": {
                         "people": [],
@@ -85,6 +87,7 @@ class MockLLM:
                         "dates": [],
                     },
                     "takeaways": ["Mock takeaway"],
+                    "sections": [{"heading": "Mock heading", "paragraphs": ["Mock paragraph."]}],
                     "flagged_documents": json.loads(fields.get("flagged", "[]")),
                     "excluded_files": json.loads(fields.get("excluded", "[]")),
                 }

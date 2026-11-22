@@ -10,7 +10,7 @@ export function jobLabel(job: JobView | undefined): string {
     return 'Task';
   }
   if (job.status === 'succeeded') {
-    const summary = readReport(job.report)?.summary.replace(/\s+/g, ' ').trim();
+    const summary = readReport(job.report)?.headline.replace(/\s+/g, ' ').trim();
     if (summary) {
       return summary.length > SNIPPET_LENGTH
         ? `${summary.slice(0, SNIPPET_LENGTH).trimEnd()}…`

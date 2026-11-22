@@ -30,18 +30,59 @@ describe('sidebar storage', () => {
 
 describe('report reader', () => {
   it('reads a summary and a report', () => {
-    expect(
-      readSummary({
-        title: 'Desk note',
-        inferred_type: 'letter',
-        summary: 'A short note.',
-        topics: ['mock'],
-        notable_points: [{ text: 'Point', page: 1, quote: 'Words' }],
-      })?.title,
-    ).toBe('Desk note');
-    expect(readReport({ summary: 'One report.', themes: ['mock'], takeaways: [] })?.summary).toBe(
-      'One report.',
-    );
+    const summary = readSummary({
+      title: 'Desk note',
+      inferred_type: 'letter',
+      summary: 'A short note.',
+      key_points: ['One', 'Two'],
+      sections: [{ heading: 'Context', paragraphs: ['Some detail.'] }],
+      topics: ['mock'],
+      notable_points: [{ text: 'Point', page: 1, quote: 'Words' }],
+    });
+    expect(summary?.title).toBe('Desk note');
+    expect(summary?.headline).toBe('A short note.');
+    expect(summary?.keyPoints).toEqual(['One', 'Two']);
+    expect(summary?.sections).toEqual([{ heading: 'Context', paragraphs: ['Some detail.'] }]);
+
+    const report = readReport({
+      summary: 'One report.',
+      themes: ['mock'],
+      takeaways: ['A', 'B'],
+      sections: [{ heading: 'Theme', paragraphs: ['Detail.'] }],
+    });
+    expect(report?.headline).toBe('One report.');
+    expect(report?.keyPoints).toEqual(['A', 'B']);
+    expect(report?.sections).toHaveLength(1);
     expect(readReport(null)).toBeNull();
+  });
+
+  it('splits an older long summary into a headline and reading', () => {
+    const report = readReport({
+      summary: 'Four notes cover one stock. The view is split.\n\nSecond paragraph here.',
+      themes: [],
+      takeaways: [],
+    });
+    expect(report?.headline).toBe('Four notes cover one stock.');
+    expect(report?.sections).toEqual([
+      {
+        heading: 'Summary',
+        paragraphs: ['Four notes cover one stock. The view is split.', 'Second paragraph here.'],
+      },
+    ]);
+  });
+
+  it('falls back to notable points when an older summary has no key points', () => {
+    const summary = readSummary({
+      title: 'Note',
+      inferred_type: 'letter',
+      summary: 'Short.',
+      topics: [],
+      notable_points: [
+        { text: 'First', page: 1, quote: 'a' },
+        { text: 'Second', page: 1, quote: 'b' },
+      ],
+    });
+    expect(summary?.keyPoints).toEqual(['First', 'Second']);
+    expect(summary?.sections).toEqual([]);
   });
 });

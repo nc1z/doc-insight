@@ -8,22 +8,27 @@ export type Entities = {
 };
 export type Claim = { text: string; document: string; page: number; quote: string };
 export type Contradiction = { about: string; claims: Claim[] };
+export type Section = { heading: string; paragraphs: string[] };
 
+// Both views lead with a one-line headline, then a few one-line points, then sections to read.
 export type DocumentSummaryView = {
   title: string;
   inferredType: string;
-  summary: string;
+  headline: string;
+  keyPoints: string[];
+  sections: Section[];
   topics: string[];
   entities: Entities;
   notablePoints: NotablePoint[];
 };
 
 export type ReportViewModel = {
-  summary: string;
+  headline: string;
+  keyPoints: string[];
+  sections: Section[];
   themes: string[];
   contradictions: Contradiction[];
   entities: Entities;
-  takeaways: string[];
   flaggedDocuments: string[];
   excludedFiles: string[];
 };
@@ -91,19 +96,54 @@ function points(value: unknown): NotablePoint[] {
   });
 }
 
+function sections(value: unknown): Section[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.flatMap((item) => {
+    const row = record(item);
+    const heading = text(row?.heading);
+    const paragraphs = texts(row?.paragraphs);
+    return heading && paragraphs.length > 0 ? [{ heading, paragraphs }] : [];
+  });
+}
+
+// Older results hold one long summary instead of a headline and sections. Split it so they
+// still read well: the first sentence becomes the headline and the rest stays as reading.
+function fromLongSummary(summary: string): { headline: string; sections: Section[] } {
+  const paragraphs = summary
+    .split(/\n{2,}/)
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+  const first = paragraphs[0] ?? summary;
+  const sentence = /^.*?[.!?](?=\s|$)/.exec(first)?.[0] ?? first;
+  const headline = sentence.length > 200 ? `${sentence.slice(0, 197).trimEnd()}…` : sentence;
+  return {
+    headline,
+    sections: summary.length > headline.length ? [{ heading: 'Summary', paragraphs }] : [],
+  };
+}
+
 export function readSummary(value: unknown): DocumentSummaryView | null {
   const body = record(value);
   const summary = text(body?.summary);
   if (!body || !summary) {
     return null;
   }
+  const notablePoints = points(body.notable_points);
+  const readSections = sections(body.sections);
+  const legacy = readSections.length === 0 ? fromLongSummary(summary) : null;
+  const keyPoints = texts(body.key_points);
   return {
     title: text(body.title),
     inferredType: text(body.inferred_type),
-    summary,
+    headline: legacy?.headline ?? summary,
+    keyPoints:
+      keyPoints.length > 0 ? keyPoints : notablePoints.slice(0, 3).map((point) => point.text),
+    sections: legacy?.sections ?? readSections,
     topics: texts(body.topics),
     entities: entities(body.entities),
-    notablePoints: points(body.notable_points),
+    notablePoints,
   };
 }
 
@@ -136,12 +176,15 @@ export function readReport(value: unknown): ReportViewModel | null {
         return [{ about, claims }];
       })
     : [];
+  const readSections = sections(body.sections);
+  const legacy = readSections.length === 0 ? fromLongSummary(summary) : null;
   return {
-    summary,
+    headline: legacy?.headline ?? summary,
+    keyPoints: texts(body.takeaways),
+    sections: legacy?.sections ?? readSections,
     themes: texts(body.themes),
     contradictions,
     entities: entities(body.entities),
-    takeaways: texts(body.takeaways),
     flaggedDocuments: texts(body.flagged_documents),
     excludedFiles: texts(body.excluded_files),
   };

@@ -108,7 +108,7 @@ export function FileList({
         aria-label="Files"
       >
         {job.documents.map((document) => {
-          const preview = showSummaries ? readSummary(document.summary)?.summary : undefined;
+          const preview = showSummaries ? readSummary(document.summary)?.headline : undefined;
           return (
             <li key={document.id} className="px-4 py-3.5">
               <div className="flex items-center gap-3.5">
