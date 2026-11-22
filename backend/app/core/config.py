@@ -23,6 +23,7 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+psycopg://docinsight:docinsight@localhost:5432/docinsight"
     queue_provider: QueueProvider = "procrastinate"
+    worker_concurrency: int = Field(default=3, ge=1)
     storage_provider: StorageProvider = "s3"
     s3_endpoint: str = "http://localhost:9000"
     s3_bucket: str = Field(default="doc-insight", min_length=1)

@@ -8,6 +8,7 @@ from app.core.config import Settings
 _ENV_KEYS = (
     "DATABASE_URL",
     "QUEUE_PROVIDER",
+    "WORKER_CONCURRENCY",
     "STORAGE_PROVIDER",
     "S3_ENDPOINT",
     "S3_BUCKET",
@@ -80,6 +81,7 @@ def test_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.cloudflare_ai_gateway_id == "default"
     assert settings.system_prompts_path.name == "prompts.yaml"
     assert settings.queue_provider == "procrastinate"
+    assert settings.worker_concurrency == 3
     assert settings.storage_provider == "s3"
     assert settings.s3_endpoint == "http://localhost:9000"
     assert settings.s3_bucket == "doc-insight"

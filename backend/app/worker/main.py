@@ -40,7 +40,7 @@ def main() -> None:
     )
     try:
         asyncio.run(repository.reclaim_abandoned(stale_seconds=settings.worker_stale_seconds))
-        queue.run_worker()
+        queue.run_worker(concurrency=settings.worker_concurrency)
     finally:
         bind_pipeline(None)
         bind_step_timeout(60)
