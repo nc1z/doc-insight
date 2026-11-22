@@ -182,7 +182,9 @@ Solves flow step 2: a client (Bruno) reads any job's state and resolves rejected
 
 ### 2B. Job State Machine
 
-- [ ] Add a state machine in `app/domain/job_state.py` listing allowed transitions; invalid transitions raise a domain error mapped to `409 Conflict`.
+- [x] Add a state machine in `app/domain/job_state.py` listing allowed transitions; invalid transitions raise a domain error mapped to `409 Conflict`.
+
+`transition` lists the allowed status changes. A waiting job can stay waiting, be confirmed into `queued`, be cancelled, or expire. The worker moves `queued` to `running`, then `consolidating`, then `succeeded`, or to `failed` from either active state. Any other change raises `invalid_transition` with status `409`.
 
 ### 2C. Re-upload, Confirm, and Cancel
 
