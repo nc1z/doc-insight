@@ -46,7 +46,7 @@ Findings from technical literature and industry guidance that shape the doc-insi
 
 **For us**:
 
-- The report schema lists each contradiction with both claims, each with its document and page.
+- The report schema lists each contradiction with both claims, each with its document, page, and quote.
 - The consolidation prompt asks for disagreements explicitly, rather than a single consensus.
 - The golden set includes a pair of documents that disagree on purpose.
 

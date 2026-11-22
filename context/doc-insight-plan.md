@@ -354,9 +354,11 @@ Solves flow step 6: the job's results contain real key details and a report.
 
 ### 6A. Output Schemas
 
-- [ ] Define the per-document schema: title, inferred type, short summary, main topics, key entities, notable points with page number and supporting quote.
-- [ ] Define the report schema: overall summary, common themes, contradictions, combined entities, takeaways, flagged documents, excluded files.
-- [ ] Each contradiction holds both claims, each with its document, page, and quote.
+- [x] Define the per-document schema: title, inferred type, short summary, main topics, key entities, notable points with page number and supporting quote.
+- [x] Define the report schema: overall summary, common themes, contradictions, combined entities, takeaways, flagged documents, excluded files.
+- [x] Each contradiction holds both claims, each with its document, page, and quote.
+
+`DocumentSummary` and `ConsolidatedReport` in `backend/app/pipeline/models.py` are the schemas a summary must match. A document has a title, an inferred type from the fixed list, a short summary, topics, and notable points. Each point has a page and a quote. Entities are grouped into people, organisations, locations, and dates. Each one has a name and optional aliases. A report has an overall summary, themes, the same entity groups, takeaways, flagged documents, and excluded files. A contradiction names what the documents disagree about and holds exactly two claims. Each claim has its text, the document, the page, and a quote.
 
 ### 6B. Summary client
 

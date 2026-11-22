@@ -21,7 +21,12 @@ class MockLLM:
                     "inferred_type": fields.get("document_type", "other"),
                     "summary": f"Mock summary of {filename}.",
                     "topics": ["mock"],
-                    "entities": [],
+                    "entities": {
+                        "people": [],
+                        "organisations": [],
+                        "locations": [],
+                        "dates": [],
+                    },
                     "notable_points": [
                         {
                             "text": "Mock point",
@@ -39,7 +44,12 @@ class MockLLM:
                     "summary": f"Mock report of {names}.",
                     "themes": ["mock"],
                     "contradictions": [],
-                    "entities": [],
+                    "entities": {
+                        "people": [],
+                        "organisations": [],
+                        "locations": [],
+                        "dates": [],
+                    },
                     "takeaways": ["Mock takeaway"],
                     "flagged_documents": json.loads(fields.get("flagged", "[]")),
                     "excluded_files": json.loads(fields.get("excluded", "[]")),

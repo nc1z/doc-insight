@@ -364,14 +364,14 @@ Document text is untrusted data. Guardrails run in layers, cheapest first.
 - Each document is summarised separately, in parallel, as its own queue task. The payload is the document id.
 - Long documents are split into chunks. Each chunk returns structured fields: topics, entities, and notable points with a page and a quote. The last call reads those fields and writes the document summary (map-reduce), within a configurable token budget. A prose summary of a chunk drops facts the last call never sees.
 - The combine step also receives relevant source excerpts alongside those structured fields, which improves faithfulness and reduces hallucination.
-- The output follows the per-document schema: title, inferred type, short summary, main topics, key entities, and notable points, each with a page number and a supporting quote.
+- The output follows the per-document schema: title, inferred type, short summary, main topics, key entities, and notable points, each with a page number and a supporting quote. Entities are grouped into people, organisations, locations, and dates. Each entity has a name and optional aliases.
 
 ### Consolidated summary
 
 - Runs once, as its own queue task, when every stored document has succeeded. A failed document blocks that task until the analyst retries it or continues without it. The document task that finds this, while holding the job row lock, inserts the consolidation task, whose payload is the job id, in the same transaction.
 - Its input is the validated document summaries, not the raw text. This keeps the prompt small and limits how far injected content can travel.
 - The output follows the report schema: overall summary, common themes, contradictions, combined entities, takeaways, flagged documents, and excluded files.
-- **Contradictions are surfaced, not merged.** LLMs tend to collapse conflicting facts into one consensus value. The prompt asks for disagreements explicitly, and each contradiction lists both claims, each with its document and page.
+- **Contradictions are surfaced, not merged.** LLMs tend to collapse conflicting facts into one consensus value. The prompt asks for disagreements explicitly, and each contradiction holds exactly two claims. Each claim has its text, the document, the page, and a quote.
 
 ### Evaluation
 
