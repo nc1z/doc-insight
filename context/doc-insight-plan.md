@@ -251,8 +251,10 @@ Extract, check, summarise, and consolidate are typed step functions. The factory
 
 ### 3D. Processing Failures
 
-- [ ] Decide what happens when a document fails during processing (fail the job, continue without it, or pause for the analyst), and record it.
+- [x] Decide what happens when a document fails during processing (fail the job, continue without it, or pause for the analyst), and record it.
 - [ ] Implement the decision, plus a timeout on each step that marks the document failed with a clear reason.
+
+A transient step failure retries 3 times with exponential backoff and jitter. After that, only that document is `failed` and shows the error. The other documents keep processing. Consolidation waits until the analyst retries the failed document, continues without it, or cancels.
 
 ### 3E. Tests and Manual Verification
 

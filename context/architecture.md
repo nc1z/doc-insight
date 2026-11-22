@@ -215,13 +215,9 @@ stateDiagram-v2
 - **Postgres is the job store and the queue.** Procrastinate inserts each queue row on the same connection as the job row, so they commit together and a crash cannot leave a queued job with no document task. This removes the need for an outbox or sweeper. Workers claim ready tasks with `SELECT … FOR UPDATE SKIP LOCKED` and must still be idempotent, because a task can be retried after a worker crash.
 - **One operation for create and enqueue.** Creating a queued job and inserting one queue row per stored document is a single operation. The Postgres adapter does it in one transaction; another queue provider would need an outbox behind the same interface.
 - **The queue carries ids, not file bytes.** A document task carries the document id. The consolidation task carries the job id. The worker loads the job and reads the file from storage by its storage key.
-- **The last finished document starts consolidation.** That task locks the job, marks itself finished, and counts stored documents that are not `succeeded` or `failed`. A count of zero moves the job to `consolidating` and inserts the consolidation task on the same connection. A second finisher finds the job already past `running`, so it does not start another report.
+- **The last finished document starts consolidation.** That task locks the job and marks itself finished. Consolidation starts only when every stored document has succeeded. A failed document shows its error and does not stop the others. The analyst retries it, continues without it, or cancels. Continuing without it excludes the file, and the report lists it. A second finisher finds the job already past `running`, so it does not start another report.
 - **Orphaned files are cleaned up, not prevented.** If storing a file succeeds but creating the job fails, the file is left without a job. A retention rule or cleanup job deletes it, in line with the retention assumption in the PRD.
 - **Uploads go to MinIO.** The file storage adapter speaks the S3 API and points at a MinIO service in Docker Compose. No cloud account is required. Moving to AWS S3 later changes the endpoint, bucket, and keys.
-
-### Open decisions
-
-- **Failures during processing**: whether the same choice applies when a document fails later (for example extraction or LLM failure), by pausing before consolidation.
 
 ## Status flow
 
@@ -291,15 +287,16 @@ stateDiagram-v2
     awaiting_input --> cancelled: cancel
     awaiting_input --> expired: timeout
     queued --> running: first document starts
-    running --> consolidating: last document finishes
+    running --> consolidating: every stored document succeeded
+    running --> awaiting_input: a document failed and the others have finished
     consolidating --> succeeded
-    running --> failed: unrecoverable error
-    consolidating --> failed: unrecoverable error
 ```
 
 ### Document states
 
 - `pending`, then `extracting`, `checking` (guardrails), `summarising`, and finally `succeeded` or `failed`.
+- A failed document keeps its error. The other documents keep processing. The analyst retries that document, continues without it, or cancels the job.
+- Transient step failures retry 3 times with exponential backoff and jitter. A permanent failure, such as a corrupt file, fails that document on the first attempt.
 - `flagged` is a separate true-or-false field, because a document can be flagged and still succeed.
 
 ### What the UI shows
@@ -330,8 +327,9 @@ flowchart TD
         Summarise --> ValidateDoc[Output validation<br/>schema, citations]
     end
 
-    ValidateDoc --> FanIn{Job locked: every stored<br/>document succeeded or failed?}
+    ValidateDoc --> FanIn{Job locked: every stored<br/>document succeeded?}
     FanIn -- yes --> Consolidate[Consolidation task<br/>payload is the job id]
+    FanIn -- "a document failed" --> Decide[Analyst retries it,<br/>continues without it, or cancels]
     Consolidate --> ValidateReport[Output validation<br/>schema, citations]
 
     Extract -. store .-> DB[(Postgres)]
@@ -366,7 +364,7 @@ Document text is untrusted data. Guardrails run in layers, cheapest first.
 
 ### Consolidated summary
 
-- Runs once, as its own queue task, when the last stored document finishes. That document task locks the job and counts stored documents that are not `succeeded` or `failed`. Zero means this task inserts the consolidation task, whose payload is the job id, in the same transaction.
+- Runs once, as its own queue task, when every stored document has succeeded. A failed document blocks that task until the analyst retries it or continues without it. The document task that finds this, while holding the job row lock, inserts the consolidation task, whose payload is the job id, in the same transaction.
 - Its input is the validated document summaries, not the raw text. This keeps the prompt small and limits how far injected content can travel.
 - The output follows the report schema: overall summary, common themes, contradictions, combined entities, takeaways, flagged documents, and excluded files.
 - **Contradictions are surfaced, not merged.** LLMs tend to collapse conflicting facts into one consensus value. The prompt asks for disagreements explicitly, and each contradiction lists both claims, each with its document and page.
@@ -491,5 +489,5 @@ Good to have for scaling the system.
 - **Exponential backoff with jitter** on transient failures: timeouts, rate limits (`429`), and provider `5xx` errors. Jitter spreads retries out so workers do not all retry at the same moment.
 - Honour the provider's `Retry-After` header when it is present.
 - **Do not retry permanent failures**, such as a corrupt file or a request the provider rejects as invalid. Invalid LLM output has its own capped schema retry.
-- **Cap the attempts**, then mark the document as failed with a clear reason. In production, failed messages move to the dead-letter queue.
+- **Cap the attempts at 3**, then mark that document as failed with a clear reason. The other documents keep processing. The analyst retries the failed document, continues without it, or cancels. In production, failed messages move to the dead-letter queue.
 - Retries are safe because workers are idempotent and each step's status is stored, so a retry resumes from the last completed step.
