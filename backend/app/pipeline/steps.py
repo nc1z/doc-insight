@@ -70,7 +70,7 @@ async def summarise_document(
         f"document_type: {check.document_type}\n"
         f"text: {body}"
     )
-    return DocumentSummary.model_validate_json(await llm.complete(prompt))
+    return await llm.complete(prompt, DocumentSummary)
 
 
 async def consolidate_summaries(
@@ -88,4 +88,4 @@ async def consolidate_summaries(
         f"flagged: {json.dumps(flagged_documents)}\n"
         f"excluded: {json.dumps(excluded_files)}"
     )
-    return ConsolidatedReport.model_validate_json(await llm.complete(prompt))
+    return await llm.complete(prompt, ConsolidatedReport)

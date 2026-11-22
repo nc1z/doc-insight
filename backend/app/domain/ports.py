@@ -1,8 +1,10 @@
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Protocol
+from typing import Any, Protocol, TypeVar
 from uuid import UUID
+
+from pydantic import BaseModel
 
 from app.domain.models import Job
 from app.domain.status import DocumentStatus, JobStatus
@@ -127,8 +129,11 @@ class JobRepository(Protocol):
     ) -> bool: ...
 
 
+SummaryT = TypeVar("SummaryT", bound=BaseModel)
+
+
 class LLMProvider(Protocol):
-    async def complete(self, prompt: str) -> str: ...
+    async def complete(self, prompt: str, output_type: type[SummaryT]) -> SummaryT: ...
 
 
 class Classifier(Protocol):

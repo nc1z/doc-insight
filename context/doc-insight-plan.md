@@ -362,9 +362,11 @@ Solves flow step 6: the job's results contain real key details and a report.
 
 ### 6B. Summary client
 
-- [ ] Use Pydantic AI against the Cloudflare AI Gateway chat-completions endpoint. The model name comes from config.
-- [ ] Parse each response into the document schema and retry up to a configured limit when it does not match.
-- [ ] Add a per-call timeout. No tools. The pipeline order stays fixed.
+- [x] Use Pydantic AI against the Cloudflare AI Gateway chat-completions endpoint. The model name comes from config.
+- [x] Parse each response into the document schema and retry up to a configured limit when it does not match.
+- [x] Add a per-call timeout. No tools. The pipeline order stays fixed.
+
+`GatewaySummaryClient` in `backend/app/adapters/summary_client.py` is the summary client. `LLM_PROVIDER=cloudflare` posts to `{CLASSIFIER_BASE_URL}/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai/v1/chat/completions`. The model name is `LLM_MODEL`. Pydantic AI checks the reply against the document schema or the report schema. A reply that does not match is asked again, up to `LLM_OUTPUT_RETRIES`. Each call stops at `LLM_TIMEOUT_SECONDS`. The model is not given tools, and this client does not choose the next pipeline step. `LLM_PROVIDER` stays `mock` until a real summary is wanted. The mock still returns the fixed summary text.
 
 ### 6C. Prompts
 

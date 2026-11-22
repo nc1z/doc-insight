@@ -23,9 +23,9 @@ _ENV_KEYS = (
     "MOCK_STEP_DELAY_SECONDS",
     "LLM_PROVIDER",
     "LLM_MODEL",
-    "LLM_BASE_URL",
     "LLM_API_KEY",
     "LLM_TIMEOUT_SECONDS",
+    "LLM_OUTPUT_RETRIES",
     "STEP_TIMEOUT_SECONDS",
     "CHUNK_TOKEN_BUDGET",
     "CLASSIFIER_PROVIDER",
@@ -54,6 +54,8 @@ def test_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
     assert settings.llm_provider == "mock"
+    assert settings.llm_model == "glm-4.7"
+    assert settings.llm_output_retries == 2
     assert settings.classifier_provider == "cloudflare"
     assert settings.llm_api_key.get_secret_value() == ""
     assert settings.classifier_api_key.get_secret_value() == "test-key"
@@ -88,25 +90,26 @@ def test_environment_overrides_defaults(monkeypatch: pytest.MonkeyPatch) -> None
     assert settings.llm_timeout_seconds == 15
 
 
-def test_hosted_llm_requires_base_url_and_key(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_cloudflare_summary_requires_api_key_and_account(monkeypatch: pytest.MonkeyPatch) -> None:
     _clear_env(monkeypatch)
 
-    with pytest.raises(ValidationError, match="LLM_BASE_URL and LLM_API_KEY"):
-        Settings(_env_file=None, llm_provider="openai_compatible")
+    with pytest.raises(ValidationError, match="LLM_API_KEY and CLOUDFLARE_ACCOUNT_ID"):
+        Settings(_env_file=None, llm_provider="cloudflare", classifier_provider="mock")
 
 
-def test_hosted_llm_accepts_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_cloudflare_summary_accepts_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
     _clear_env(monkeypatch)
 
     settings = Settings(
         _env_file=None,
         classifier_provider="mock",
-        llm_provider="openai_compatible",
-        llm_base_url="https://example.test/v1",
+        llm_provider="cloudflare",
         llm_api_key="test-key",
+        cloudflare_account_id="acct",
     )
 
     assert settings.llm_api_key.get_secret_value() == "test-key"
+    assert settings.llm_model == "glm-4.7"
 
 
 def test_cloudflare_requires_api_key_and_account(monkeypatch: pytest.MonkeyPatch) -> None:

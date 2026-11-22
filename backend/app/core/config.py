@@ -10,7 +10,7 @@ _REPO_ROOT = _BACKEND_DIR.parent
 
 StorageProvider = Literal["s3"]
 QueueProvider = Literal["procrastinate"]
-LlmProvider = Literal["mock", "openai_compatible"]
+LlmProvider = Literal["mock", "cloudflare"]
 ClassifierProvider = Literal["mock", "cloudflare", "jev"]
 
 
@@ -40,9 +40,9 @@ class Settings(BaseSettings):
 
     llm_provider: LlmProvider = "mock"
     llm_model: str = Field(default="glm-4.7", min_length=1)
-    llm_base_url: str = ""
     llm_api_key: SecretStr = SecretStr("")
     llm_timeout_seconds: float = Field(default=60, gt=0)
+    llm_output_retries: int = Field(default=2, ge=0)
     step_timeout_seconds: float = Field(default=60, gt=0)
     chunk_token_budget: int = Field(default=2048, gt=0)
 
@@ -60,18 +60,18 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def hosted_providers_need_credentials(self) -> Self:
-        if self.llm_provider == "openai_compatible":
+        if self.llm_provider == "cloudflare":
             missing = [
                 name
                 for name, present in (
-                    ("LLM_BASE_URL", self.llm_base_url),
                     ("LLM_API_KEY", self.llm_api_key.get_secret_value()),
+                    ("CLOUDFLARE_ACCOUNT_ID", self.cloudflare_account_id),
                 )
                 if not present
             ]
             if missing:
                 required = " and ".join(missing)
-                raise ValueError(f"{required} is required when LLM_PROVIDER is openai_compatible")
+                raise ValueError(f"{required} is required when LLM_PROVIDER is cloudflare")
         if self.classifier_provider == "jev" and not self.classifier_api_key.get_secret_value():
             raise ValueError("CLASSIFIER_API_KEY is required when CLASSIFIER_PROVIDER is jev")
         if self.classifier_provider == "cloudflare":

@@ -1,6 +1,11 @@
 import json
+from typing import TypeVar
+
+from pydantic import BaseModel
 
 from app.core.config import Settings
+
+SummaryT = TypeVar("SummaryT", bound=BaseModel)
 
 
 class MockLLM:
@@ -10,12 +15,12 @@ class MockLLM:
     def from_settings(cls, _settings: Settings) -> MockLLM:
         return cls()
 
-    async def complete(self, prompt: str) -> str:
+    async def complete(self, prompt: str, output_type: type[SummaryT]) -> SummaryT:
         kind, _, rest = prompt.partition("\n")
         fields = _fields(rest)
         if kind == "summarise":
             filename = fields["filename"]
-            return json.dumps(
+            return output_type.model_validate(
                 {
                     "title": filename,
                     "inferred_type": fields.get("document_type", "other"),
@@ -39,7 +44,7 @@ class MockLLM:
         if kind == "consolidate":
             filenames = json.loads(fields.get("filenames", "[]"))
             names = ", ".join(filenames) if filenames else "no documents"
-            return json.dumps(
+            return output_type.model_validate(
                 {
                     "summary": f"Mock report of {names}.",
                     "themes": ["mock"],

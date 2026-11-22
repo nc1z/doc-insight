@@ -15,6 +15,7 @@ from app.adapters.jobs import PostgresJobRepository
 from app.adapters.mocks.mock_classifier import MockClassifier
 from app.adapters.mocks.mock_llm import MockLLM
 from app.adapters.queue import build_queue
+from app.adapters.summary_client import GatewaySummaryClient
 from app.core.config import Settings
 from app.core.db import create_engine, create_session_factory
 from app.main import create_app
@@ -101,18 +102,19 @@ def test_factory_selects_the_mock_llm_and_the_cloudflare_classifier(
     assert isinstance(build_classifier(settings), CloudflareClassifier)
 
 
-def test_factory_rejects_an_unregistered_provider() -> None:
+def test_factory_selects_the_gateway_summary_client() -> None:
     hosted = Settings(
         _env_file=None,
-        llm_provider="openai_compatible",
-        llm_base_url="https://example.test/v1",
+        llm_provider="cloudflare",
         llm_api_key="test-key",
+        cloudflare_account_id="acct",
         classifier_provider="jev",
         classifier_api_key="test-key",
     )
 
-    with pytest.raises(ValueError, match="Unknown LLM provider: openai_compatible"):
-        build_llm(hosted)
+    summary = build_llm(hosted)
+    assert isinstance(summary, GatewaySummaryClient)
+    assert summary._base_url == "https://api.cloudflare.com/client/v4/accounts/acct/ai/v1"
     assert isinstance(build_classifier(hosted), DecisionModelClassifier)
 
 

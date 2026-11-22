@@ -11,6 +11,7 @@ dependencies = [
     "pillow>=13.0.0",
     "procrastinate>=3.11.0",
     "psycopg[binary]>=3.3.9",
+    "pydantic-ai>=2.68.0",
     "pydantic-settings>=2.16.3",
     "pymupdf4llm>=2.1",
     "pypdf>=7.1.0",

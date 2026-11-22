@@ -9,6 +9,7 @@ from app.adapters.mocks.mock_classifier import MockClassifier
 from app.adapters.mocks.mock_llm import MockLLM
 from app.adapters.queue import build_queue
 from app.adapters.s3 import S3FileStorage
+from app.adapters.summary_client import GatewaySummaryClient
 from app.core.config import Settings
 from app.domain.ports import Classifier, FileStorage, JobRepository, LLMProvider
 
@@ -75,6 +76,7 @@ ClassifierBuilder = Callable[[Settings], Classifier]
 
 _LLM_ADAPTERS: dict[str, LLMBuilder] = {
     "mock": MockLLM.from_settings,
+    "cloudflare": GatewaySummaryClient.from_settings,
 }
 _CLASSIFIER_ADAPTERS: dict[str, ClassifierBuilder] = {
     "mock": MockClassifier.from_settings,
