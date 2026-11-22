@@ -13,9 +13,20 @@ flowchart LR
     Nginx --> API
 
     subgraph Backend
-        API[API container<br/>FastAPI] --> DB[(Postgres<br/>jobs, results, queue)]
-        API --> Files[(MinIO<br/>S3 API)]
-        Worker[Worker container<br/>same image, pipeline] --> DB
+        API[API container<br/>FastAPI]
+        Worker[Worker container<br/>same image, pipeline]
+        Files[(MinIO<br/>S3 API)]
+
+        subgraph Postgres
+            DB[(Jobs and results)]
+            Queue@{ shape: h-cyl, label: "Task queue<br/>Procrastinate" }
+        end
+
+        API --> DB
+        API -- "enqueue tasks" --> Queue
+        API --> Files
+        Worker -- "process tasks" --> Queue
+        Worker --> DB
         Worker --> Files
     end
 
@@ -294,6 +305,7 @@ stateDiagram-v2
     running --> awaiting_input: a document failed and the others have finished
     running --> cancelled: cancel
     consolidating --> succeeded
+    consolidating --> failed: consolidation failed
 ```
 
 ### Document states
