@@ -1,0 +1,43 @@
+info:
+  name: Upload mixed
+  type: http
+  seq: 3
+
+http:
+  method: POST
+  url: "{{baseUrl}}/jobs"
+  auth: none
+  body:
+    type: multipart-form
+    data:
+      - name: files
+        type: file
+        value:
+          - ../../samples/desk-note.pdf
+          - ../../samples/invalid/notes.pdf
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test("waits for a decision", function () {
+          expect(res.body.status).to.equal("awaiting_input");
+          expect(res.body.accepted.map((item) => item.filename)).to.eql(["desk-note.pdf"]);
+          expect(res.body.rejected).to.eql([
+            {
+              filename: "notes.pdf",
+              code: "unsupported_type",
+              message: "The file is not a PDF.",
+            },
+          ]);
+        });
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "201"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

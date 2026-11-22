@@ -151,14 +151,18 @@ Procrastinate is the queue, recorded on `2026-11-22`. `PostgresJobRepository.cre
 
 ### 1G. Tests and Manual Verification
 
-- [ ] Unit tests for each validation rule, using small PDFs generated in tests.
-- [ ] Integration tests for the three `POST /jobs` outcomes, checking stored files, job rows, and queue entries.
-- [ ] Bruno requests for valid, mixed, and all-invalid uploads using files in `samples/`.
-- [ ] Expected result: `202`, `201`, and `422` respectively, each with the documented response body.
+- [x] Unit tests for each validation rule, using small PDFs generated in tests.
+- [x] Integration tests for the three `POST /jobs` outcomes, checking stored files, job rows, and queue entries.
+- [x] Bruno requests for valid, mixed, and all-invalid uploads using files in `samples/`.
+- [x] Expected result: `202`, `201`, and `422` respectively, each with the documented response body.
+
+`backend/tests/test_validation.py` generates a small PDF per rule. `backend/tests/test_create_job.py` checks the three outcomes against stored bytes, job rows, and queue rows. Bruno's `upload-valid`, `upload-mixed`, and `upload-invalid` requests send `samples/desk-note.pdf` and the files in `samples/invalid/`.
 
 ### 1H. Learning Checkpoint
 
-- [ ] Learning: explain the code changes in small chunks with file names, short snippets, layman explanations, and how atomic create-and-enqueue keeps jobs from being stranded. The domain, adapter, API, and schema packages arrive with this feature.
+- [x] Learning: explain the code changes in small chunks with file names, short snippets, layman explanations, and how atomic create-and-enqueue keeps jobs from being stranded. The domain, adapter, API, and schema packages arrive with this feature.
+
+An upload is validated, stored in MinIO, then written as a job. A fully valid upload inserts the job row and the Procrastinate queue row in one transaction, so a queued job cannot be left without a worker task. A mixed upload is saved as `awaiting_input` and is not queued.
 
 Suggested commit message: `feat(backend): add job creation with file validation and storage`
 

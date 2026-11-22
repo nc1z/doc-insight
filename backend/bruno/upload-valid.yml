@@ -1,0 +1,35 @@
+info:
+  name: Upload valid
+  type: http
+  seq: 2
+
+http:
+  method: POST
+  url: "{{baseUrl}}/jobs"
+  auth: none
+  body:
+    type: multipart-form
+    data:
+      - name: files
+        type: file
+        value:
+          - ../../samples/desk-note.pdf
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test("queues the job", function () {
+          expect(res.body.status).to.equal("queued");
+          expect(res.body.id).to.be.a("string").and.not.empty;
+        });
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "202"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

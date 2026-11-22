@@ -1,0 +1,58 @@
+info:
+  name: Upload invalid
+  type: http
+  seq: 4
+
+http:
+  method: POST
+  url: "{{baseUrl}}/jobs"
+  auth: none
+  body:
+    type: multipart-form
+    data:
+      - name: files
+        type: file
+        value:
+          - ../../samples/invalid/notes.pdf
+          - ../../samples/invalid/corrupt.pdf
+          - ../../samples/invalid/encrypted.pdf
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test("rejects every file", function () {
+          expect(res.body).to.eql({
+            code: "validation_error",
+            message: "Every file was rejected.",
+            details: {
+              rejected: [
+                {
+                  filename: "notes.pdf",
+                  code: "unsupported_type",
+                  message: "The file is not a PDF.",
+                },
+                {
+                  filename: "corrupt.pdf",
+                  code: "invalid_pdf",
+                  message: "The PDF is corrupt or cannot be parsed.",
+                },
+                {
+                  filename: "encrypted.pdf",
+                  code: "encrypted_pdf",
+                  message: "The PDF is password-protected.",
+                },
+              ],
+            },
+          });
+        });
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "422"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
