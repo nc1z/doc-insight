@@ -69,6 +69,10 @@ function form(files: File[]): FormData {
   return body;
 }
 
+export function reportPdfUrl(id: string): string {
+  return `${root}/jobs/${id}/report.pdf`;
+}
+
 export function getJob(id: string): Promise<JobView> {
   return request(`/jobs/${id}`).then((response) => response.json() as Promise<JobView>);
 }

@@ -5,7 +5,8 @@ from typing import Annotated
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, File, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import JSONResponse, Response
 
 from app.adapters.factory import get_file_storage, get_job_repository
 from app.core.config import Settings, get_settings
@@ -23,6 +24,7 @@ from app.domain.validation import (
     message_for,
     validate_files,
 )
+from app.export.report_pdf import render_report_pdf
 from app.pipeline.guardrails import FLAG_REASONS
 from app.schemas.jobs import (
     AcceptedDocument,
@@ -60,6 +62,32 @@ async def read_job(
     if job is None:
         raise DomainError(404, "not_found", "The job was not found.")
     return _job_view(job)
+
+
+@router.get(
+    "/jobs/{id}/report.pdf",
+    response_class=Response,
+    responses={
+        200: {"content": {"application/pdf": {}}, "description": "One page per overview and file."},
+        404: {"model": ErrorBody},
+        409: {"model": ErrorBody},
+    },
+)
+async def download_report(
+    id: UUID,
+    jobs: Annotated[JobRepository, Depends(get_job_repository)],
+) -> Response:
+    job = await jobs.get(id)
+    if job is None:
+        raise DomainError(404, "not_found", "The job was not found.")
+    if job.status is not JobStatus.SUCCEEDED or not job.report:
+        raise DomainError(409, "report_not_ready", "The report is not ready to download.")
+    pdf = await run_in_threadpool(render_report_pdf, job)
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="doc-insight-{str(id)[:8]}.pdf"'},
+    )
 
 
 @router.post(

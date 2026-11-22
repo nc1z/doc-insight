@@ -37,6 +37,20 @@ def _pdf() -> bytes:
     return buffer.getvalue()
 
 
+def test_a_report_cannot_be_downloaded_before_it_exists(migrated_database_url: str) -> None:
+    with _client(migrated_database_url) as client:
+        created = client.post(
+            "/jobs", files=[("files", ("desk-note.pdf", _pdf(), "application/pdf"))]
+        )
+        queued = client.get(f"/jobs/{created.json()['id']}/report.pdf")
+        missing = client.get(f"/jobs/{uuid4()}/report.pdf")
+
+    assert queued.status_code == 409
+    assert queued.json()["code"] == "report_not_ready"
+    assert missing.status_code == 404
+    asyncio.run(_clear(migrated_database_url))
+
+
 def test_queued_job_shows_pending_documents(migrated_database_url: str) -> None:
     with _client(migrated_database_url) as client:
         created = client.post(

@@ -479,6 +479,7 @@ The page shows progress until the job succeeds. `pollInterval` in `frontend/src/
 
 - [x] Transition smoothly from progress into the report.
 - [x] Overview tab with the consolidated report and excluded files; one tab per document with key details and citations.
+- [x] Download PDF button: `GET /jobs/{id}/report.pdf` returns one overview page and one page per document (`backend/app/export/report_pdf.py`).
 
 ### 9C. States and URL
 
@@ -626,7 +627,3 @@ Still to do:
 ### Document Caching
 
 - Cache document results by file hash plus pipeline version (model, prompt, schema); cache consolidation by the set of hashes.
-
-### Download
-
-- Add a download button exporting the summaries; decide Markdown, PDF, or both.

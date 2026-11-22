@@ -1,7 +1,8 @@
-import { FileText } from 'lucide-react';
+import { Download, FileText } from 'lucide-react';
 import type { ReactNode } from 'react';
 
-import type { JobView } from '@/api/client';
+import { reportPdfUrl, type JobView } from '@/api/client';
+import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   readReport,
@@ -193,6 +194,14 @@ export function ReportView({ job }: { job: JobView }) {
 
   return (
     <Tabs defaultValue="overview" className="w-full text-left">
+      <div className="mb-3 flex justify-end">
+        <Button asChild variant="outline" size="sm">
+          <a href={reportPdfUrl(job.id)} download>
+            <Download aria-hidden />
+            Download PDF
+          </a>
+        </Button>
+      </div>
       <TabsList>
         <TabsTrigger value="overview">Overview</TabsTrigger>
         {job.documents.map((document) => (

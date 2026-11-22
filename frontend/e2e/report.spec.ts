@@ -41,6 +41,14 @@ const done = {
         title: 'Desk note',
         inferred_type: 'letter',
         summary: 'Mock summary of desk-note.pdf.',
+        key_points: ['Mock key point'],
+        sections: [
+          {
+            heading: 'Detail',
+            paragraphs: ['Mock paragraph.'],
+            quotes: [{ quote: 'A line from the note.', page: 1, document: 'desk-note.pdf' }],
+          },
+        ],
         topics: ['mock'],
         entities: { people: [], organisations: [], locations: [], dates: [] },
         notable_points: [{ text: 'Mock point', page: 1, quote: 'A line from the note.' }],
@@ -81,6 +89,10 @@ test('a finished upload opens again from the sidebar', async ({ page }) => {
   await expect(page.getByText('Hidden text')).toBeVisible();
   await expect(page.getByRole('tab', { name: 'Overview' })).toBeVisible();
   await expect(page.getByRole('main').getByText('Mock report of desk-note.pdf.')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Download PDF' })).toHaveAttribute(
+    'href',
+    '/api/jobs/job-report/report.pdf',
+  );
 
   await page.reload();
   await page.getByRole('button', { name: 'Mock report of desk-note.pdf.', exact: true }).click();

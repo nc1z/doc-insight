@@ -3,6 +3,7 @@ from io import BytesIO
 from pathlib import Path
 from uuid import UUID
 
+import pymupdf
 import pytest
 from fastapi.testclient import TestClient
 from pydantic_ai.messages import ModelResponse, TextPart
@@ -186,7 +187,13 @@ async def _worker_reaches_succeeded(database_url: str) -> None:
                     listen_notify=False,
                 )
             body = client.get(f"/jobs/{job_id}").json()
+            download = client.get(f"/jobs/{job_id}/report.pdf")
         assert body["status"] == "succeeded"
+        assert download.status_code == 200
+        assert download.headers["content-type"] == "application/pdf"
+        assert f"doc-insight-{job_id[:8]}.pdf" in download.headers["content-disposition"]
+        with pymupdf.open(stream=download.content, filetype="pdf") as pdf:
+            assert len(pdf) == 2
         assert body["progress"] == {"completed_steps": 3, "total_steps": 3}
         assert body["documents"][0]["summary"]["summary"] == "Mock summary of desk-note.pdf."
         assert body["documents"][0]["summary"]["inferred_type"] == "other"

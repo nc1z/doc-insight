@@ -475,7 +475,7 @@ flowchart LR
   - **Overview**: a large one-line headline, five numbered points, then "Further reading" with a heading per topic and short paragraphs, with pull quotes between them. Where documents disagree, both claims sit under the topic as indented quotes with the file and page. Then theme tags, and last a plain bullet list of metadata: documents, people, organisations, locations, dates, flagged files, and files left out.
   - **One tab per document**: a one-line headline, three points, reading with pull quotes, topic tags, and metadata bullets. The metadata has no cards or tables.
 - The UI draws the report from structured fields, not markdown. A report saved before the structured fields shows through a fallback that splits its long summary into a headline and short paragraphs.
-- A download button exports the summaries (good to have).
+- A Download PDF button above the tabs saves the report as a PDF with one page for the overview and one page for each document, in tab order. The API draws it (`GET /jobs/{id}/report.pdf`) from the stored results with PyMuPDF, which the pipeline already uses. A page whose content runs long is scaled down so the page count stays at one per tab. The endpoint answers `409` until the job has succeeded.
 
 ### One page
 
@@ -488,7 +488,7 @@ flowchart LR
 
 ### UI open decisions
 
-- **Download format**: Markdown, PDF, or both.
+- **Download format**: PDF only. Markdown, if wanted, is another renderer beside the PDF one in `backend/app/export/`.
 
 ## Enhancements
 
