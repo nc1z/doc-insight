@@ -210,7 +210,7 @@ stateDiagram-v2
 
 - **The API coordinates every step.** Each adapter does one thing and never calls another adapter.
 - **State changes use action endpoints**: `POST /jobs/{id}/confirm` and `POST /jobs/{id}/cancel`. Confirm means the analyst accepts the final set of files and processing can start. Each action is explicit, and the server rejects actions that are invalid for the job's current state with `409 Conflict`. Cancel is a `POST`, not a `DELETE`, because the job record stays with status `cancelled`.
-- **Postgres is the job store and the queue.** Creating a job and enqueuing it happen in one transaction, so a crash cannot leave a queued job with no message. This removes the need for an outbox or sweeper. Workers claim ready jobs with `SELECT … FOR UPDATE SKIP LOCKED` and must still be idempotent, because a job can be retried after a worker crash.
+- **Postgres is the job store and the queue.** Procrastinate inserts the queue row on the same connection as the job row, so the two commit together and a crash cannot leave a queued job with no message. This removes the need for an outbox or sweeper. Workers claim ready jobs with `SELECT … FOR UPDATE SKIP LOCKED` and must still be idempotent, because a job can be retried after a worker crash.
 - **One operation for create and enqueue.** Because the two writes are atomic, the adapter interface exposes them as a single operation. The Postgres adapter does it in one transaction; another queue provider would need an outbox behind the same interface.
 - **Only the job ID goes on the queue.** The worker loads the job from the job store and reads files from file storage by their storage keys.
 - **Orphaned files are cleaned up, not prevented.** If storing a file succeeds but creating the job fails, the file is left without a job. A retention rule or cleanup job deletes it, in line with the retention assumption in the PRD.
@@ -218,7 +218,6 @@ stateDiagram-v2
 
 ### Open decisions
 
-- **Queue library**: Procrastinate or PGQueuer. Pick the one that can enqueue on the same connection and transaction that creates the job.
 - **Failures during processing**: whether the same choice applies when a document fails later (for example extraction or LLM failure), by pausing before consolidation.
 - **Timeout for `awaiting_input`**: how long a job waits for a decision before it expires.
 

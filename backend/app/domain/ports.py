@@ -1,4 +1,20 @@
+from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Protocol
+
+from app.domain.models import Job
+
+
+@dataclass(frozen=True)
+class NewDocument:
+    filename: str
+    storage_key: str
+    sha256: str | None = None
+    page_count: int | None = None
+
+
+class JobRepository(Protocol):
+    async def create_and_enqueue(self, documents: Sequence[NewDocument]) -> Job: ...
 
 
 class FileStorage(Protocol):

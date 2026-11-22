@@ -94,7 +94,7 @@ async def _alembic_version(database_url: str) -> str:
 
 
 def test_migrations_apply_job_tables(migrated_database_url: str) -> None:
-    assert asyncio.run(_alembic_version(migrated_database_url)) == "0002_jobs_documents"
+    assert asyncio.run(_alembic_version(migrated_database_url)) == "0003_procrastinate"
 
 
 def test_health_reads_migrated_database(migrated_database_url: str) -> None:

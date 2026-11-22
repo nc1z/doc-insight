@@ -9,6 +9,7 @@ _BACKEND_DIR = Path(__file__).resolve().parents[2]
 _REPO_ROOT = _BACKEND_DIR.parent
 
 StorageProvider = Literal["s3"]
+QueueProvider = Literal["procrastinate"]
 LlmProvider = Literal["mock", "openai_compatible"]
 ClassifierProvider = Literal["mock", "jev"]
 
@@ -21,6 +22,7 @@ class Settings(BaseSettings):
     )
 
     database_url: str = "postgresql+psycopg://docinsight:docinsight@localhost:5432/docinsight"
+    queue_provider: QueueProvider = "procrastinate"
     storage_provider: StorageProvider = "s3"
     s3_endpoint: str = "http://localhost:9000"
     s3_bucket: str = Field(default="doc-insight", min_length=1)

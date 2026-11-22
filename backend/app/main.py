@@ -8,7 +8,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.adapters.factory import build_file_storage
+from app.adapters.factory import build_file_storage, build_job_repository
 from app.core.config import Settings, get_settings
 from app.core.db import create_engine, create_session_factory, get_session
 from app.core.errors import DomainError, register_exception_handlers
@@ -20,6 +20,10 @@ from app.domain.ports import FileStorage
 async def lifespan(application: FastAPI) -> AsyncIterator[None]:
     engine = create_engine(application.state.settings.database_url)
     application.state.session_factory = create_session_factory(engine)
+    application.state.job_repository = build_job_repository(
+        application.state.settings,
+        application.state.session_factory,
+    )
     try:
         await application.state.file_storage.ensure_bucket()
         yield

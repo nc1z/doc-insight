@@ -31,6 +31,8 @@ These are my decision records and thought process throughout planning & developm
 - `2026-11-21 20:28` **MinIO for uploads** (`context/architecture.md`): for this POC, the API and worker store files in a local MinIO service through the S3 API, with no cloud account. In production the same adapter would point at AWS S3, and only the endpoint, bucket, and keys would change.
 - `2026-11-21 21:50` **Limit errors return `422`** (`context/architecture.md`): an oversized file or a PDF with too many pages is a per-file rejection, and too many files is a `422` for the whole upload. A mixed upload still accepts the valid files and records the others as rejected, which is the same result the analyst already sees. The error codes stay `file_too_large`, `page_limit_exceeded`, and `file_count_exceeded`.
 - `2026-11-21 22:23` **Validation as a sequence of strategies** (`backend/app/domain/validation.py`): a strategy list is extendible for future file types and less difficult to change. A new format is another strategy, and each file keeps its own first rejection while the other files are still checked.
+- `2026-11-22 09:45` **Procrastinate for the queue** (`backend/app/adapters/jobs.py`): Procrastinate can insert the queue row on the caller's database connection, so the job row and the queue row commit together. `create_and_enqueue` is that operation, and the queue payload is the job id.
+- `2026-11-22 09:49` **Adapters and a factory so providers stay swappable** (`backend/app/adapters/factory.py`): file storage and the job queue each sit behind a port, and the factory picks the class from config. A later provider is another class registered on that factory, so the API stays the same.
 
 ## Re-design based on Industry Practices
 

@@ -124,8 +124,10 @@ MinIO runs in Compose with the `minio_data` volume. The image is `alpine/minio`,
 
 ### 1D. Queue Library and Create-and-Enqueue
 
-- [ ] Confirm which library (Procrastinate or PGQueuer) can enqueue on the same connection and transaction that creates the job; pick it and record the decision.
-- [ ] Add a `JobRepository` protocol with a single `create_and_enqueue` operation, and implement `PostgresJobRepository` in `app/adapters/` so the job row and the queue entry commit in one transaction. Register it on the adapter factory.
+- [x] Confirm which library (Procrastinate or PGQueuer) can enqueue on the same connection and transaction that creates the job; pick it and record the decision.
+- [x] Add a `JobRepository` protocol with a single `create_and_enqueue` operation, and implement `PostgresJobRepository` in `app/adapters/` so the job row and the queue entry commit in one transaction. Register it on the adapter factory.
+
+Procrastinate is the queue, recorded on `2026-11-22`. `PostgresJobRepository.create_and_enqueue` inserts the job and defers `process_job` on the same connection. The payload is the job id. Migration `0003_procrastinate` applies the queue schema. `build_job_repository` selects it from `queue_provider`.
 
 ### 1E. POST /jobs
 
