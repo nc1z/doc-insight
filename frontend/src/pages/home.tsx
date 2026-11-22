@@ -88,8 +88,8 @@ export function HomePage() {
     queries: ids.map((id) => ({
       queryKey: jobKey(id),
       queryFn: () => getJob(id),
-      refetchInterval: (query: { state: { data?: JobView } }) =>
-        pollInterval(query.state.data?.status),
+      refetchInterval: (query: { state: { data?: JobView; fetchFailureCount: number } }) =>
+        pollInterval(query.state.data?.status, query.state.fetchFailureCount),
     })),
   });
 

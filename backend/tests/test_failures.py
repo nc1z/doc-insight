@@ -56,6 +56,22 @@ def test_a_failed_document_waits_while_the_other_keeps_processing(
     asyncio.run(_analyst_decides(migrated_database_url))
 
 
+def test_a_dead_document_task_ends_the_poll(migrated_database_url: str) -> None:
+    asyncio.run(_dead_document_task(migrated_database_url))
+
+
+def test_a_live_worker_keeps_the_poll(migrated_database_url: str) -> None:
+    asyncio.run(_live_worker(migrated_database_url))
+
+
+def test_a_stale_worker_ends_the_poll(migrated_database_url: str) -> None:
+    asyncio.run(_stale_worker(migrated_database_url))
+
+
+def test_a_dead_consolidation_task_ends_the_poll(migrated_database_url: str) -> None:
+    asyncio.run(_dead_consolidation(migrated_database_url))
+
+
 async def _times_out(database_url: str) -> None:
     engine = create_engine(database_url)
     repository = PostgresJobRepository(create_session_factory(engine), build_queue(database_url))
@@ -223,6 +239,140 @@ async def _analyst_decides(database_url: str) -> None:
         await engine.dispose()
 
 
+async def _dead_document_task(database_url: str) -> None:
+    engine = create_engine(database_url)
+    try:
+        await _clear(engine)
+        with _client(database_url) as client:
+            created = client.post("/jobs", files=[_pdf("notes.pdf")])
+            job_id = created.json()["id"]
+            document_id = client.get(f"/jobs/{job_id}").json()["documents"][0]["id"]
+            await _mark_queue(engine, "process_document", "document_id", document_id, "failed")
+            assert client.get(f"/jobs/{job_id}").json()["status"] == "queued"
+            await _reclaim(engine, database_url)
+            body = client.get(f"/jobs/{job_id}").json()
+        assert body["status"] == "awaiting_input"
+        assert body["documents"][0]["status"] == "failed"
+        assert body["documents"][0]["error"]["message"] == "The step failed."
+    finally:
+        await _clear(engine)
+        await engine.dispose()
+
+
+async def _live_worker(database_url: str) -> None:
+    engine = create_engine(database_url)
+    try:
+        await _clear(engine)
+        with _client(database_url) as client:
+            created = client.post("/jobs", files=[_pdf("notes.pdf")])
+            job_id = created.json()["id"]
+            document_id = client.get(f"/jobs/{job_id}").json()["documents"][0]["id"]
+            await _mark_queue(
+                engine,
+                "process_document",
+                "document_id",
+                document_id,
+                "doing",
+                heartbeat_age=0,
+            )
+            await _reclaim(engine, database_url)
+            body = client.get(f"/jobs/{job_id}").json()
+        assert body["status"] == "queued"
+        assert body["documents"][0]["status"] == "pending"
+    finally:
+        await _clear(engine)
+        await engine.dispose()
+
+
+async def _stale_worker(database_url: str) -> None:
+    engine = create_engine(database_url)
+    try:
+        await _clear(engine)
+        with _client(database_url) as client:
+            created = client.post("/jobs", files=[_pdf("notes.pdf")])
+            job_id = created.json()["id"]
+            document_id = client.get(f"/jobs/{job_id}").json()["documents"][0]["id"]
+            await _mark_queue(
+                engine,
+                "process_document",
+                "document_id",
+                document_id,
+                "doing",
+                heartbeat_age=120,
+            )
+            assert client.get(f"/jobs/{job_id}").json()["status"] == "queued"
+            await _reclaim(engine, database_url)
+            body = client.get(f"/jobs/{job_id}").json()
+        assert body["status"] == "awaiting_input"
+        assert body["documents"][0]["error"]["message"] == "The step failed."
+    finally:
+        await _clear(engine)
+        await engine.dispose()
+
+
+async def _dead_consolidation(database_url: str) -> None:
+    engine = create_engine(database_url)
+    repository = PostgresJobRepository(create_session_factory(engine), build_queue(database_url))
+    try:
+        await _clear(engine)
+        with _client(database_url) as client:
+            created = client.post("/jobs", files=[_pdf("notes.pdf")])
+            job_id = created.json()["id"]
+            document_id = client.get(f"/jobs/{job_id}").json()["documents"][0]["id"]
+            await run_document(repository, UUID(document_id))
+            waiting = client.get(f"/jobs/{job_id}").json()
+            assert waiting["status"] == "consolidating"
+            await _mark_queue(engine, "consolidate_job", "job_id", job_id, "failed")
+            assert client.get(f"/jobs/{job_id}").json()["status"] == "consolidating"
+            await _reclaim(engine, database_url)
+            body = client.get(f"/jobs/{job_id}").json()
+        assert body["status"] == "failed"
+        assert body["error"]["code"] == "step_failed"
+        assert body["error"]["message"] == "The step failed."
+    finally:
+        await _clear(engine)
+        await engine.dispose()
+
+
+async def _reclaim(engine: AsyncEngine, database_url: str) -> None:
+    repository = PostgresJobRepository(create_session_factory(engine), build_queue(database_url))
+    await repository.reclaim_abandoned(stale_seconds=30)
+
+
+async def _mark_queue(
+    engine: AsyncEngine,
+    task_name: str,
+    arg_name: str,
+    arg_value: str,
+    status: str,
+    heartbeat_age: int | None = None,
+) -> None:
+    async with engine.begin() as connection:
+        worker_id = None
+        if heartbeat_age is not None:
+            worker_id = await connection.scalar(
+                text(
+                    "INSERT INTO procrastinate_workers (last_heartbeat) "
+                    "VALUES (now() - make_interval(secs => :age)) RETURNING id"
+                ),
+                {"age": heartbeat_age},
+            )
+        await connection.execute(
+            text(
+                "UPDATE procrastinate_jobs "
+                "SET status = CAST(:status AS procrastinate_job_status), worker_id = :worker "
+                "WHERE task_name = :task AND args->>:arg = :value"
+            ),
+            {
+                "status": status,
+                "worker": worker_id,
+                "task": task_name,
+                "arg": arg_name,
+                "value": arg_value,
+            },
+        )
+
+
 async def _no_sleep(_seconds: float) -> None:
     return None
 
@@ -281,4 +431,9 @@ async def _consolidations(engine: AsyncEngine, job_id: str) -> int:
 
 async def _clear(engine: AsyncEngine) -> None:
     async with engine.begin() as connection:
-        await connection.execute(text("TRUNCATE jobs, procrastinate_jobs RESTART IDENTITY CASCADE"))
+        await connection.execute(
+            text(
+                "TRUNCATE jobs, procrastinate_jobs, procrastinate_workers "
+                "RESTART IDENTITY CASCADE"
+            )
+        )

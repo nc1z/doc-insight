@@ -1,3 +1,4 @@
+import logging
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from typing import Any
@@ -5,7 +6,7 @@ from uuid import UUID
 
 import psycopg
 from procrastinate import App
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
@@ -24,6 +25,8 @@ from app.domain.ports import (
     StoredUsage,
 )
 from app.domain.status import DocumentStatus, JobStatus
+
+logger = logging.getLogger("app.jobs")
 
 
 class PostgresJobRepository:
@@ -409,8 +412,39 @@ class PostgresJobRepository:
                 return False
             if report is not None:
                 job.report = dict(report)
+            job.failure_reason = None
             job.status = transition(job.status, JobStatus.SUCCEEDED)
             return True
+
+    async def fail_job(self, job_id: UUID, code: str) -> None:
+        async with self._sessions() as session, session.begin():
+            job = await self._locked(session, job_id)
+            if job is None or job.status is not JobStatus.CONSOLIDATING:
+                return
+            job.failure_reason = code
+            job.status = transition(job.status, JobStatus.FAILED)
+
+    async def reclaim_abandoned(self, *, stale_seconds: float) -> None:
+        documents, consolidating = await self._abandoned(stale_seconds)
+        for document_id in documents:
+            logger.warning("reclaiming document %s", document_id)
+            await self.fail_document(document_id, "step_failed")
+        for abandoned_id in consolidating:
+            logger.warning("reclaiming job %s", abandoned_id)
+            await self.fail_job(abandoned_id, "step_failed")
+
+    async def _abandoned(self, stale_seconds: float) -> tuple[list[UUID], list[UUID]]:
+        shared = {"stale_seconds": stale_seconds}
+        async with self._sessions() as session:
+            documents = await session.scalars(
+                _ABANDONED_DOCUMENTS,
+                {**shared, "task_name": PROCESS_DOCUMENT, "arg_name": "document_id"},
+            )
+            consolidating = await session.scalars(
+                _ABANDONED_CONSOLIDATIONS,
+                {**shared, "task_name": CONSOLIDATE_JOB, "arg_name": "job_id"},
+            )
+            return list(documents), list(consolidating)
 
     async def storage_keys(self) -> set[str]:
         async with self._sessions() as session:
@@ -510,6 +544,44 @@ def _document(item: NewDocument) -> Document:
         page_count=item.page_count,
         status=DocumentStatus.PENDING,
     )
+
+
+_LIVE_TASK = """
+    SELECT 1
+    FROM procrastinate_jobs q
+    LEFT JOIN procrastinate_workers w ON w.id = q.worker_id
+    WHERE q.task_name = :task_name
+      AND q.args->>:arg_name = {owner}.id::text
+      AND (
+        q.status = 'todo'
+        OR (
+            q.status = 'doing'
+            AND w.last_heartbeat > now() - make_interval(secs => :stale_seconds)
+        )
+      )
+"""
+
+_ABANDONED_DOCUMENTS = text(
+    f"""
+    SELECT d.id
+    FROM documents d
+    JOIN jobs j ON j.id = d.job_id
+    WHERE j.status::text IN ('queued', 'running')
+      AND d.status::text NOT IN ('succeeded', 'failed')
+      AND d.excluded IS FALSE
+      AND d.storage_key IS NOT NULL
+      AND NOT EXISTS ({_LIVE_TASK.format(owner="d")})
+    """
+)
+
+_ABANDONED_CONSOLIDATIONS = text(
+    f"""
+    SELECT j.id
+    FROM jobs j
+    WHERE j.status::text = 'consolidating'
+      AND NOT EXISTS ({_LIVE_TASK.format(owner="j")})
+    """
+)
 
 
 async def _driver_connection(session: AsyncSession) -> psycopg.AsyncConnection:

@@ -131,6 +131,10 @@ class JobRepository(Protocol):
         report: Mapping[str, Any] | None = None,
     ) -> bool: ...
 
+    async def fail_job(self, job_id: UUID, code: str) -> None: ...
+
+    async def reclaim_abandoned(self, *, stale_seconds: float) -> None: ...
+
     async def save_llm_calls(
         self,
         job_id: UUID,

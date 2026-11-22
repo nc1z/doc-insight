@@ -105,6 +105,9 @@ services:
     build:
       context: .
       dockerfile: frontend/Dockerfile
+      args:
+        VITE_POLL_INTERVAL_MS: ${VITE_POLL_INTERVAL_MS:-1500}
+        VITE_POLL_MAX_INTERVAL_MS: ${VITE_POLL_MAX_INTERVAL_MS:-30000}
     ports:
       - '8080:80'
     depends_on:

@@ -36,6 +36,8 @@ class Settings(BaseSettings):
     awaiting_input_timeout_seconds: int = Field(default=24 * 60 * 60, gt=0)
     orphan_max_age_seconds: int = Field(default=60 * 60, gt=0)
     maintenance_cron: str = Field(default="*/15 * * * *", min_length=1)
+    worker_stale_seconds: int = Field(default=30, gt=0)
+    reclaim_cron: str = Field(default="* * * * *", min_length=1)
     mock_step_delay_seconds: float = Field(default=1, ge=0)
 
     llm_provider: LlmProvider = "mock"

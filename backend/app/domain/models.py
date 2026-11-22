@@ -41,6 +41,7 @@ class Job(Base):
         onupdate=func.now(),
     )
     report: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    failure_reason: Mapped[str | None] = mapped_column(Text)
 
     documents: Mapped[list[Document]] = relationship(
         back_populates="job",

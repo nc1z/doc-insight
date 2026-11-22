@@ -10,6 +10,7 @@ from app.adapters.jobs import PostgresJobRepository
 from app.adapters.maintenance import (
     DELETE_ORPHAN_FILES,
     EXPIRE_AWAITING_JOBS,
+    RECLAIM_ABANDONED,
     delete_orphans_configured,
     expire_configured,
 )
@@ -155,13 +156,22 @@ def test_short_configured_timeout_expires_the_job_and_deletes_orphans(
 
 def test_maintenance_tasks_use_the_configured_schedule() -> None:
     cron = "0 * * * *"
-    application = build_queue("postgresql://localhost/unused", maintenance_cron=cron)
+    reclaim = "*/5 * * * *"
+    application = build_queue(
+        "postgresql://localhost/unused",
+        maintenance_cron=cron,
+        reclaim_cron=reclaim,
+    )
     scheduled = {
         name: task.cron
         for (name, _periodic_id), task in application.periodic_registry.periodic_tasks.items()
     }
 
-    assert scheduled == {EXPIRE_AWAITING_JOBS: cron, DELETE_ORPHAN_FILES: cron}
+    assert scheduled == {
+        EXPIRE_AWAITING_JOBS: cron,
+        DELETE_ORPHAN_FILES: cron,
+        RECLAIM_ABANDONED: reclaim,
+    }
 
 
 def _pdf(name: str) -> tuple[str, tuple[str, bytes, str]]:

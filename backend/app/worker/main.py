@@ -17,7 +17,11 @@ def main() -> None:
     settings = get_settings()
     catalog = load_system_prompts(settings.system_prompts_path)
     engine = create_engine(settings.database_url)
-    queue = build_queue(settings.database_url, maintenance_cron=settings.maintenance_cron)
+    queue = build_queue(
+        settings.database_url,
+        maintenance_cron=settings.maintenance_cron,
+        reclaim_cron=settings.reclaim_cron,
+    )
     repository = PostgresJobRepository(create_session_factory(engine), queue)
     delay = settings.mock_step_delay_seconds if settings.llm_provider == "mock" else 0
     bind_jobs(repository)
@@ -35,6 +39,7 @@ def main() -> None:
         )
     )
     try:
+        asyncio.run(repository.reclaim_abandoned(stale_seconds=settings.worker_stale_seconds))
         queue.run_worker()
     finally:
         bind_pipeline(None)

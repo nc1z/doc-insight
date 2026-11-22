@@ -1,15 +1,17 @@
 import asyncio
 from uuid import UUID
 
+import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.adapters.jobs import PostgresJobRepository
 from app.adapters.queue import CONSOLIDATE_JOB, PROCESS_DOCUMENT, build_queue
+from app.api.jobs import _job_view
 from app.core.db import create_engine, create_session_factory
 from app.domain.ports import NewDocument
 from app.domain.status import DocumentStatus, JobStatus
-from app.worker.processing import run_consolidation, run_document
+from app.worker.processing import bind_pipeline, run_consolidation, run_document
 from app.worker.tasks import bind_jobs
 
 
@@ -32,6 +34,32 @@ def test_a_retry_runs_only_the_steps_after_the_stored_status(migrated_database_u
 
 def test_the_last_document_starts_consolidation_once(migrated_database_url: str) -> None:
     asyncio.run(_fan_in(migrated_database_url))
+
+
+def test_a_timed_out_consolidation_fails_the_job(migrated_database_url: str) -> None:
+    asyncio.run(_consolidation_timeout(migrated_database_url))
+
+
+def test_a_document_task_that_stops_early_fails_that_document(
+    migrated_database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def stop(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    monkeypatch.setattr("app.worker.tasks.run_document", stop)
+    asyncio.run(_document_task_stops(migrated_database_url))
+
+
+def test_a_consolidation_that_stops_early_fails_the_job(
+    migrated_database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def stop(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    monkeypatch.setattr("app.worker.tasks.run_consolidation", stop)
+    asyncio.run(_consolidation_stops(migrated_database_url))
 
 
 async def _reaches_consolidation(database_url: str) -> None:
@@ -121,6 +149,82 @@ async def _fan_in(database_url: str) -> None:
         await run_consolidation(repository, job.id)
         assert await _consolidations(engine, str(job.id)) == 1
     finally:
+        await _clear(engine)
+        await engine.dispose()
+
+
+class _TimeoutReport:
+    async def run_step(self, document_id: UUID, status: DocumentStatus) -> None:
+        return
+
+    async def build_report(self, job_id: UUID) -> dict[str, object]:
+        raise TimeoutError
+
+
+async def _consolidation_timeout(database_url: str) -> None:
+    engine = create_engine(database_url)
+    repository = PostgresJobRepository(create_session_factory(engine), build_queue(database_url))
+    bind_pipeline(_TimeoutReport())
+    try:
+        await _clear(engine)
+        job = await repository.create_and_enqueue([_document("desk-note.pdf")])
+        document_id = job.documents[0].id
+        await run_document(repository, document_id)
+        await run_consolidation(repository, job.id)
+        failed = await repository.get(job.id)
+        assert failed is not None
+        assert failed.status is JobStatus.FAILED
+        assert failed.failure_reason == "step_timeout"
+        error = _job_view(failed).error
+        assert error is not None
+        assert error.code == "step_timeout"
+        assert error.message == "The step timed out."
+    finally:
+        bind_pipeline(None)
+        await _clear(engine)
+        await engine.dispose()
+
+
+async def _document_task_stops(database_url: str) -> None:
+    engine = create_engine(database_url)
+    repository = PostgresJobRepository(create_session_factory(engine), build_queue(database_url))
+    bind_jobs(repository)
+    try:
+        await _clear(engine)
+        job = await repository.create_and_enqueue([_document("desk-note.pdf")])
+        await build_queue(database_url).tasks[PROCESS_DOCUMENT](
+            document_id=str(job.documents[0].id)
+        )
+        failed = await repository.get(job.id)
+        assert failed is not None
+        assert failed.status is JobStatus.AWAITING_INPUT
+        assert failed.documents[0].status is DocumentStatus.FAILED
+        assert failed.documents[0].rejection_reason == "step_failed"
+    finally:
+        bind_jobs(None)
+        await _clear(engine)
+        await engine.dispose()
+
+
+async def _consolidation_stops(database_url: str) -> None:
+    engine = create_engine(database_url)
+    queue = build_queue(database_url)
+    repository = PostgresJobRepository(create_session_factory(engine), queue)
+    bind_jobs(repository)
+    try:
+        await _clear(engine)
+        job = await repository.create_and_enqueue([_document("desk-note.pdf")])
+        await run_document(repository, job.documents[0].id)
+        await queue.tasks[CONSOLIDATE_JOB](job_id=str(job.id))
+        failed = await repository.get(job.id)
+        assert failed is not None
+        assert failed.status is JobStatus.FAILED
+        error = _job_view(failed).error
+        assert error is not None
+        assert error.code == "step_failed"
+        assert error.message == "The step failed."
+    finally:
+        bind_jobs(None)
         await _clear(engine)
         await engine.dispose()
 

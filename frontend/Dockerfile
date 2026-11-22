@@ -15,6 +15,10 @@ RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
     pnpm install --frozen-lockfile --filter frontend
 
 COPY frontend/ frontend/
+ARG VITE_POLL_INTERVAL_MS=1500
+ARG VITE_POLL_MAX_INTERVAL_MS=30000
+ENV VITE_POLL_INTERVAL_MS=$VITE_POLL_INTERVAL_MS
+ENV VITE_POLL_MAX_INTERVAL_MS=$VITE_POLL_MAX_INTERVAL_MS
 RUN pnpm --filter frontend build
 
 

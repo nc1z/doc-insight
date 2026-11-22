@@ -4,7 +4,12 @@ from procrastinate import App
 
 from app.adapters.queue import CONSOLIDATE_JOB, PROCESS_DOCUMENT
 from app.domain.ports import JobRepository
-from app.worker.processing import run_consolidation, run_document
+from app.worker.processing import (
+    run_consolidation,
+    run_document,
+    settle_consolidation,
+    settle_document,
+)
 
 _jobs: JobRepository | None = None
 _step_timeout = 60.0
@@ -23,11 +28,21 @@ def bind_step_timeout(seconds: float) -> None:
 def register_processing(application: App) -> None:
     @application.task(name=PROCESS_DOCUMENT)
     async def process_document(document_id: str) -> None:
-        await run_document(_require(), UUID(document_id), step_timeout=_step_timeout)
+        repository = _require()
+        document = UUID(document_id)
+        try:
+            await run_document(repository, document, step_timeout=_step_timeout)
+        finally:
+            await settle_document(repository, document)
 
     @application.task(name=CONSOLIDATE_JOB)
     async def consolidate_job(job_id: str) -> None:
-        await run_consolidation(_require(), UUID(job_id))
+        repository = _require()
+        job = UUID(job_id)
+        try:
+            await run_consolidation(repository, job)
+        finally:
+            await settle_consolidation(repository, job)
 
 
 def _require() -> JobRepository:

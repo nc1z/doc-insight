@@ -5,6 +5,8 @@ from collections.abc import Awaitable, Callable
 from typing import Any, Protocol
 from uuid import UUID
 
+from pydantic_ai.exceptions import ModelRequestTimeout
+
 from app.domain.failures import StepFailure
 from app.domain.ports import JobRepository
 from app.domain.status import DocumentStatus, JobStatus
@@ -137,9 +139,53 @@ async def run_consolidation(repository: JobRepository, job_id: UUID) -> None:
     job = await repository.get(job_id)
     if job is None or job.status is not JobStatus.CONSOLIDATING:
         return
-    report = await _pipeline.build_report(job_id) if _pipeline is not None else None
+    try:
+        report = await _pipeline.build_report(job_id) if _pipeline is not None else None
+    except StepFailure as exc:
+        await _fail_consolidation(repository, job_id, exc.code)
+        return
+    except (TimeoutError, ModelRequestTimeout):
+        await _fail_consolidation(repository, job_id, "step_timeout")
+        return
+    except Exception:
+        logger.exception("job %s consolidation failed", job_id)
+        await _fail_consolidation(repository, job_id, "step_failed")
+        return
     if await repository.consolidate(job_id, report):
         logger.info("consolidated job %s", job_id)
+
+
+async def _fail_consolidation(repository: JobRepository, job_id: UUID, code: str) -> None:
+    logger.warning("job %s consolidation failed: %s", job_id, code)
+    await repository.fail_job(job_id, code)
+
+
+async def settle_document(repository: JobRepository, document_id: UUID) -> None:
+    """Fail a document whose task ended while the job was still being polled."""
+    try:
+        progress = await repository.document_progress(document_id)
+        if (
+            progress is None
+            or progress.excluded
+            or not progress.stored
+            or progress.status in _FINISHED
+            or progress.job_status not in _ACTIVE
+        ):
+            return
+        await repository.fail_document(document_id, "step_failed")
+    except Exception:
+        logger.exception("document %s could not be settled", document_id)
+
+
+async def settle_consolidation(repository: JobRepository, job_id: UUID) -> None:
+    """Fail a job whose consolidation ended while the page was still polling."""
+    try:
+        job = await repository.get(job_id)
+        if job is None or job.status is not JobStatus.CONSOLIDATING:
+            return
+        await _fail_consolidation(repository, job_id, "step_failed")
+    except Exception:
+        logger.exception("job %s consolidation could not be settled", job_id)
 
 
 def bind_pipeline(pipeline: PipelineRunner | None) -> None:

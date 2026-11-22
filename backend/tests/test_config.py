@@ -20,6 +20,8 @@ _ENV_KEYS = (
     "AWAITING_INPUT_TIMEOUT_SECONDS",
     "ORPHAN_MAX_AGE_SECONDS",
     "MAINTENANCE_CRON",
+    "WORKER_STALE_SECONDS",
+    "RECLAIM_CRON",
     "MOCK_STEP_DELAY_SECONDS",
     "LLM_PROVIDER",
     "LLM_MODEL",
@@ -66,6 +68,8 @@ def test_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.awaiting_input_timeout_seconds == 24 * 60 * 60
     assert settings.orphan_max_age_seconds == 60 * 60
     assert settings.maintenance_cron == "*/15 * * * *"
+    assert settings.worker_stale_seconds == 30
+    assert settings.reclaim_cron == "* * * * *"
     assert settings.mock_step_delay_seconds == 1
     assert settings.step_timeout_seconds == 60
     assert settings.chunk_token_budget == 2048
@@ -153,6 +157,8 @@ def test_env_example_lists_every_setting() -> None:
         "TEST_POSTGRES_USER",
         "TEST_POSTGRES_PASSWORD",
         "TEST_POSTGRES_DB",
+        "VITE_POLL_INTERVAL_MS",
+        "VITE_POLL_MAX_INTERVAL_MS",
     }
 
     assert settings_names <= names

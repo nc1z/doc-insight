@@ -262,8 +262,14 @@ def _job_view(job: Job) -> JobView:
         rejected_files=rejected,
         excluded_files=excluded,
         report=job.report,
-        error=None,
+        error=_job_error(job),
     )
+
+
+def _job_error(job: Job) -> ErrorBody | None:
+    if job.status is not JobStatus.FAILED or job.failure_reason is None:
+        return None
+    return ErrorBody(code=job.failure_reason, message=message_for(job.failure_reason))
 
 
 def _job_document(document: Document) -> JobDocument:

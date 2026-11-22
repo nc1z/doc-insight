@@ -43,7 +43,11 @@ def _postgres_jobs(
 ) -> JobRepository:
     return PostgresJobRepository(
         session_factory,
-        build_queue(settings.database_url, maintenance_cron=settings.maintenance_cron),
+        build_queue(
+            settings.database_url,
+            maintenance_cron=settings.maintenance_cron,
+            reclaim_cron=settings.reclaim_cron,
+        ),
     )
 
 

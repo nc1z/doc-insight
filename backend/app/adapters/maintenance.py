@@ -11,9 +11,10 @@ from app.domain.ports import FileStorage
 
 EXPIRE_AWAITING_JOBS = "expire_awaiting_jobs"
 DELETE_ORPHAN_FILES = "delete_orphan_files"
+RECLAIM_ABANDONED = "reclaim_abandoned_jobs"
 
 
-def register_maintenance(application: App, *, cron: str) -> None:
+def register_maintenance(application: App, *, cron: str, reclaim_cron: str) -> None:
     @application.periodic(cron=cron)
     @application.task(name=EXPIRE_AWAITING_JOBS, queueing_lock=EXPIRE_AWAITING_JOBS)
     async def expire_awaiting_jobs(timestamp: int) -> None:
@@ -25,6 +26,12 @@ def register_maintenance(application: App, *, cron: str) -> None:
     async def delete_orphans(timestamp: int) -> None:
         del timestamp
         await _delete_orphans(application)
+
+    @application.periodic(cron=reclaim_cron)
+    @application.task(name=RECLAIM_ABANDONED, queueing_lock=RECLAIM_ABANDONED)
+    async def reclaim_abandoned(timestamp: int) -> None:
+        del timestamp
+        await _reclaim(application)
 
 
 async def _expire(queue: App) -> None:
@@ -38,6 +45,16 @@ async def expire_configured(queue: App, settings: Settings, storage: FileStorage
     try:
         repository = PostgresJobRepository(create_session_factory(engine), queue)
         await expire_waiting_jobs(repository, storage, older_than=cutoff)
+    finally:
+        await engine.dispose()
+
+
+async def _reclaim(queue: App) -> None:
+    settings = get_settings()
+    engine = create_engine(settings.database_url)
+    try:
+        repository = PostgresJobRepository(create_session_factory(engine), queue)
+        await repository.reclaim_abandoned(stale_seconds=settings.worker_stale_seconds)
     finally:
         await engine.dispose()
 

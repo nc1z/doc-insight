@@ -12,6 +12,8 @@ describe('poll interval', () => {
     expect(pollInterval('awaiting_input')).toBe(false);
     expect(pollInterval('succeeded')).toBe(false);
     expect(pollInterval(undefined)).toBe(false);
+    expect(pollInterval('running', 1)).toBe(3000);
+    expect(pollInterval('running', 5)).toBe(30000);
   });
 });
 
