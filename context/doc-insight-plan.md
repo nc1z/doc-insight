@@ -318,25 +318,31 @@ The check reads the PDF. An injection phrase, a fake role marker (`SYSTEM:`, `</
 ### 5B. Decision-model Classifier Adapter
 
 - [x] Implement a classifier adapter behind the `Classifier` interface, returning the probability that a chunk contains instructions aimed at the model.
-- [x] Add a configurable flag threshold; keep the mock classifier as the default.
+- [x] Add a configurable flag threshold. The configured default provider is cloudflare.
 - [x] Use the configured decision model for inferred document type (a choice from a fixed list).
 - [x] Add `prompts.yaml` in `app/pipeline/` and `load_system_prompts`, which validates every entry (ID, version, template, placeholders) at startup; the path comes from config. Keep the classifier questions and option descriptions in that file, not in code.
 
-Each stored chunk is sent to the configured decision model. The model returns the probability that the chunk contains instructions aimed at the model. A probability above `CLASSIFIER_FLAG_THRESHOLD` (default 0.7) marks the document flagged. The same model picks a document type from the fixed list in `prompts.yaml`, and the summary stores that choice. The questions and the option descriptions are in that file. `load_system_prompts` checks every entry's id, version, template, and placeholders when the API and the worker start. The path is `SYSTEM_PROMPTS_PATH`. The mock stays the default. The `cloudflare` provider posts to the gateway evaluation endpoint (`/ai/run`) with the model from config. The `jev` provider posts to `/v1/systemone`. The mock stays the default. Pydantic AI is not used for this call.
+Each stored chunk is sent to the configured decision model. The model returns the probability that the chunk contains instructions aimed at the model. A probability above `CLASSIFIER_FLAG_THRESHOLD` (default 0.7) marks the document flagged. The same model picks a document type from the fixed list in `prompts.yaml`, and the summary stores that choice. The questions and the option descriptions are in that file. `load_system_prompts` checks every entry's id, version, template, and placeholders when the API and the worker start. The path is `SYSTEM_PROMPTS_PATH`. The configured default provider is `cloudflare`. Set `CLASSIFIER_PROVIDER` to `mock` when there is no Cloudflare account; CI does that. The `cloudflare` provider posts to the gateway evaluation endpoint (`/ai/run`) with the model from config. The `jev` provider posts to `/v1/systemone`. Pydantic AI is not used for this call.
 
 ### 5C. Flagging
 
-- [ ] Set `flagged` on the document when any check fires, and include the reasons in `GET /jobs/{id}`.
-- [ ] Decide whether flagged documents continue with a warning or pause the job for the analyst, and record it.
+- [x] Set `flagged` on the document when any check fires, and include the reasons in `GET /jobs/{id}`.
+- [x] Decide whether flagged documents continue with a warning or pause the job for the analyst, and record it.
+
+A document is flagged when a chunk's probability is above `CLASSIFIER_FLAG_THRESHOLD`, or when the PDF contains hidden text, invisible characters, or an encoded blob. Those reasons are stored in `guardrail_results` and returned as `flag_reasons` on `GET /jobs/{id}`. A phrase or a role marker stays in that table and does not flag the document by itself. The job keeps going, and the document still gets a summary. The flag and the reasons are the warning. The analyst is not asked to pause.
 
 ### 5D. Tests and Manual Verification
 
-- [ ] Tests: the adversarial sample is flagged; a benign document that discusses prompt injection is not.
-- [ ] Bruno: upload the adversarial sample and see `flagged: true` with reasons.
+- [x] Tests: the adversarial sample is flagged; a benign document that discusses prompt injection is not.
+- [x] Bruno: upload the adversarial sample and see `flagged: true` with reasons.
+
+`feedback-hidden-text` finishes succeeded with `flagged: true` and `flag_reasons` of `hidden_text`. `security-explainer` quotes "ignore previous instructions" while discussing prompt injection. The phrase is stored as `injection_pattern`, and the document is not flagged. The mock scores that discussion at 0, which is what the injection question asks of the real model. Bruno uploads `samples/adversarial/hidden-note.pdf`, a note with a white one-point sentence, and expects `flagged: true` with `hidden_text`.
 
 ### 5E. Learning Checkpoint
 
-- [ ] Learning: explain the code changes in small chunks with file names, short snippets, layman explanations, and why cheap checks run before the model-based one.
+- [x] Learning: explain the code changes in small chunks with file names, short snippets, layman explanations, and why cheap checks run before the model-based one.
+
+Pages are split with a simple strategy: a paragraph, then a sentence, and each chunk stays inside the token budget (`backend/app/pipeline/chunk.py`). The classifier sits behind an adapter (`backend/app/adapters/factory.py`), so the provider and the model come from config and the pipeline does not change when they do. Each chunk gets a probability. If that probability is above the threshold, the document is flagged true and `GET /jobs/{id}` includes the reasons (`backend/app/worker/pipeline.py`). The cheap checks run on the PDF first and can see white or tiny text the words alone do not mark. Hidden text, invisible characters, and encoded blobs flag on their own. A phrase or a role marker is recorded and does not.
 
 Suggested commit message: `feat(backend): add layered guardrails and document flagging`
 

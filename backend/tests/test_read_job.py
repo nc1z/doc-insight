@@ -56,6 +56,7 @@ def test_queued_job_shows_pending_documents(migrated_database_url: str) -> None:
             "filename": "desk-note.pdf",
             "status": "pending",
             "flagged": False,
+            "flag_reasons": [],
             "error": None,
             "summary": None,
         }
@@ -133,6 +134,7 @@ def test_openapi_schema_matches_the_job_view() -> None:
         "filename",
         "status",
         "flagged",
+        "flag_reasons",
         "error",
         "summary",
     }

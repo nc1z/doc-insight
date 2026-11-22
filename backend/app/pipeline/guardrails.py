@@ -17,6 +17,12 @@ _TAG_START = 0xE0000
 _TAG_END = 0xE007F
 
 
+# Hidden text, invisible characters, and encoded blobs flag on their own.
+# A phrase or a role marker is stored and does not.
+ALONE_RULES = frozenset({"hidden_text", "invisible_characters", "encoded_blob"})
+FLAG_REASONS = frozenset({*ALONE_RULES, "classifier"})
+
+
 @dataclass(frozen=True)
 class GuardrailFinding:
     page_number: int

@@ -1,0 +1,36 @@
+info:
+  name: Upload
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: "{{baseUrl}}/jobs"
+  auth: inherit
+  body:
+    type: multipart-form
+    data:
+      - name: files
+        type: file
+        value:
+          - ../../samples/adversarial/hidden-note.pdf
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test("queues the hidden note", function () {
+          expect(res.body.status).to.equal("queued");
+          expect(res.body.id).to.be.a("string").and.not.empty;
+          bru.setVar("jobId", res.body.id);
+        });
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "202"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

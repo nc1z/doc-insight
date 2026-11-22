@@ -23,6 +23,7 @@ from app.domain.validation import (
     message_for,
     validate_files,
 )
+from app.pipeline.guardrails import FLAG_REASONS
 from app.schemas.jobs import (
     AcceptedDocument,
     AwaitingJob,
@@ -269,9 +270,16 @@ def _job_document(document: Document) -> JobDocument:
         filename=document.filename,
         status=document.status.value,
         flagged=document.flagged,
+        flag_reasons=_flag_reasons(document),
         error=error,
         summary=document.summary,
     )
+
+
+def _flag_reasons(document: Document) -> list[str]:
+    if not document.flagged:
+        return []
+    return sorted({item.rule for item in document.guardrails if item.rule in FLAG_REASONS})
 
 
 def _job_file(document: Document) -> JobFile:

@@ -39,6 +39,7 @@ class JobDocument(BaseModel):
     filename: str
     status: str
     flagged: bool
+    flag_reasons: list[str]
     error: ErrorBody | None
     summary: dict[str, Any] | None
 

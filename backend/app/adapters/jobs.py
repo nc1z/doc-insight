@@ -68,7 +68,7 @@ class PostgresJobRepository:
             return await session.get(
                 Job,
                 job_id,
-                options=[selectinload(Job.documents)],
+                options=[selectinload(Job.documents).selectinload(Document.guardrails)],
             )
 
     async def add_documents(
@@ -376,7 +376,7 @@ class PostgresJobRepository:
         return await session.get(
             Job,
             job_id,
-            options=[selectinload(Job.documents)],
+            options=[selectinload(Job.documents).selectinload(Document.guardrails)],
             with_for_update=True,
         )
 

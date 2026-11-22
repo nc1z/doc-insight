@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import Sequence
 from typing import Any
 from uuid import UUID
 
@@ -15,7 +16,7 @@ from app.domain.ports import (
 )
 from app.domain.status import DocumentStatus
 from app.pipeline.chunk import chunk_pages
-from app.pipeline.guardrails import scan_pdf
+from app.pipeline.guardrails import ALONE_RULES, GuardrailFinding, scan_pdf
 from app.pipeline.models import DocumentSummary, ExtractedText, ExtractInput, PageText
 from app.pipeline.steps import (
     check_document,
@@ -23,6 +24,16 @@ from app.pipeline.steps import (
     extract_text,
     summarise_document,
 )
+
+
+def _page_for(excerpt: str, chunks: Sequence[StoredChunk], text: ExtractedText) -> int:
+    for chunk in chunks:
+        if chunk.text.startswith(excerpt) or excerpt.startswith(chunk.text):
+            return chunk.page_number
+    for page in text.pages:
+        if page.text.startswith(excerpt) or excerpt.startswith(page.text):
+            return page.page
+    return text.pages[0].page if text.pages else 1
 
 
 class DocumentPipeline:
@@ -64,21 +75,31 @@ class DocumentPipeline:
             flag_threshold=self._flag_threshold,
         )
         if status is DocumentStatus.CHECKING:
+            findings: list[GuardrailFinding] = []
             if progress.storage_key is not None:
                 data = await self._files.get(progress.storage_key)
                 findings = await asyncio.to_thread(scan_pdf, data)
-                await self._jobs.replace_guardrails(
-                    document_id,
-                    [
-                        StoredGuardrail(
-                            page_number=finding.page_number,
-                            rule=finding.rule,
-                            excerpt=finding.excerpt,
-                        )
-                        for finding in findings
-                    ],
+            if checked.flagged:
+                findings.append(
+                    GuardrailFinding(
+                        page_number=_page_for(checked.excerpt, stored_chunks, extracted),
+                        rule="classifier",
+                        excerpt=checked.excerpt,
+                    )
                 )
-            await self._jobs.save_flag(document_id, checked.flagged)
+            await self._jobs.replace_guardrails(
+                document_id,
+                [
+                    StoredGuardrail(
+                        page_number=finding.page_number,
+                        rule=finding.rule,
+                        excerpt=finding.excerpt,
+                    )
+                    for finding in findings
+                ],
+            )
+            flagged = checked.flagged or any(finding.rule in ALONE_RULES for finding in findings)
+            await self._jobs.save_flag(document_id, flagged)
             return
         summary = await summarise_document(
             ExtractInput(filename=progress.filename, page_count=progress.page_count),

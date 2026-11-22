@@ -27,6 +27,7 @@ class CheckResult(BaseModel):
     label: str
     score: float
     document_type: str
+    excerpt: str = ""
 
 
 class NotablePoint(BaseModel):

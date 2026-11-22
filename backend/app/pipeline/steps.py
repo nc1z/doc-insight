@@ -35,8 +35,13 @@ async def check_document(
     await asyncio.sleep(delay_seconds)
     units = list(chunks) if chunks is not None else [page.text for page in text.pages]
     readable = [unit for unit in units if unit.strip()]
-    scores = [await classifier.injection_probability(unit) for unit in readable]
-    score = max(scores, default=0.0)
+    score = 0.0
+    winning = ""
+    for unit in readable:
+        unit_score = await classifier.injection_probability(unit)
+        if unit_score > score:
+            score = unit_score
+            winning = unit
     document_type = await classifier.document_type("\n".join(readable))
     flagged = score > flag_threshold
     return CheckResult(
@@ -44,6 +49,7 @@ async def check_document(
         label="injection" if flagged else "benign",
         score=score,
         document_type=document_type,
+        excerpt=winning[:240] if flagged else "",
     )
 
 

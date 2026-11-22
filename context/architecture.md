@@ -254,6 +254,7 @@ sequenceDiagram
       "filename": "a.pdf",
       "status": "summarising",
       "flagged": false,
+      "flag_reasons": [],
       "error": null,
       "summary": null
     },
@@ -262,6 +263,7 @@ sequenceDiagram
       "filename": "b.pdf",
       "status": "succeeded",
       "flagged": true,
+      "flag_reasons": ["hidden_text"],
       "error": null,
       "summary": {}
     }
@@ -299,7 +301,7 @@ stateDiagram-v2
 - `pending`, then `extracting`, `checking` (guardrails), `summarising`, and finally `succeeded` or `failed`.
 - A failed document keeps its error. The other documents keep processing. The analyst retries that document, continues without it, or cancels the job.
 - Transient step failures retry 3 times with exponential backoff and jitter. A permanent failure, such as a corrupt file, fails that document on the first attempt.
-- `flagged` is a separate true-or-false field, because a document can be flagged and still succeed.
+- `flagged` is a separate true-or-false field, because a document can be flagged and still succeed. `flag_reasons` lists the rules that set it: `classifier`, `hidden_text`, `invisible_characters`, or `encoded_blob`. The job keeps going. The flag and the reasons are the warning.
 
 ### What the UI shows
 
@@ -351,7 +353,7 @@ flowchart TD
 Document text is untrusted data. Guardrails run in layers, cheapest first.
 
 - **Programmatic checks**: patterns such as "ignore previous instructions" or fake role markers, hidden text (white or tiny font), invisible Unicode characters, and long encoded blobs.
-- **Decision-model classifier**: a fast, cheap decision model returns the probability that each chunk contains instructions aimed at the model. It sits behind its own classifier interface (`classify(text) -> label, score`), not the LLM adapter, because decision models do not take prompts or generate text.
+- **Decision-model classifier**: a fast, cheap decision model returns the probability that each chunk contains instructions aimed at the model, and a document type from the fixed list. It sits behind its own classifier interface (`injection_probability`, `document_type`), not the LLM adapter, because decision models do not take prompts or generate text.
 - **Datamarking (spotlighting)**: document text in prompts has a special marker character interleaved through it, and the system prompt explains that marked text is data and must never be followed as instructions. Delimiters alone can be faked by an attacker; datamarking is far more resistant.
 - **No tools for the LLM**: the pipeline's model only returns JSON and cannot take actions, so a successful injection can distort output but cannot trigger anything.
 - **Output validation**: every LLM response is checked against its schema and retried on invalid output. Citations are checked programmatically: the cited page must contain the quoted text.
@@ -409,14 +411,13 @@ Each step picks its model through configuration (strategy pattern). The pipeline
 
 - Extracted text per page in `pages`, kept for citation checks and re-runs. `needs_image` is set when `page.get_image_info()` lists an image displayed on the page. A short page of text stays unmarked, and so does a blank page. Phase 8 renders a marked page for Tesseract or a vision model.
 - Chunks of that page text in `chunks`. Each chunk carries its page number and does not cross a page. `CHUNK_TOKEN_BUDGET` defaults to 2048 cl100k tokens, enough for a full page of text. A denser page splits inside that page.
-- Programmatic guardrail findings in `guardrail_results`. Each row is the page, the rule, and a short excerpt. The rules are an injection phrase, a fake role marker, invisible characters, a long encoded blob, and text drawn in white or at a tiny size. A phrase or a role marker is recorded and does not, by itself, mark the document flagged.
+- Programmatic guardrail findings in `guardrail_results`. Each row is the page, the rule, and a short excerpt. The rules are an injection phrase, a fake role marker, invisible characters, a long encoded blob, and text drawn in white or at a tiny size. A classifier row is added when a chunk's probability is above the threshold. A phrase or a role marker is recorded and does not, by itself, mark the document flagged.
 - Document summaries and the consolidated report, as validated JSON.
 - Telemetry per LLM call: model, prompt version, tokens, and latency.
 - Status of each step, so a retried job resumes from the last completed step.
 
 ### Pipeline open decisions
 
-- **Flagged documents**: process them with hardened prompts and a warning, or pause the job for the analyst to decide, as with rejected files.
 - **GLM version**: GLM 4.7 with JSON mode and validation, or a newer version with schema-constrained output.
 
 ## UI/UX
