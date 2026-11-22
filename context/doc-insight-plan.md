@@ -1,6 +1,6 @@
 # PLAN: doc-insight
 
-This plan builds doc-insight in phases, following [architecture.md](architecture.md) and [PRD.md](PRD.md). The backend comes first: foundations, then the upload and job API, then a worker running a mocked pipeline end to end, then real extraction, guardrails, and LLM steps. Every backend phase is testable through Bruno before any UI exists. The frontend starts only once the backend is complete, and builds against the `GET /jobs/{id}` contract defined in the architecture.
+This plan builds doc-insight in phases, following [architecture.md](architecture.md) and [PRD.md](PRD.md). The backend comes first: foundations, then the upload and job API, then a worker running a mocked pipeline end to end, then real extraction, guardrails, and LLM steps. Every backend phase is testable through Bruno before any UI exists. The frontend phases come next, and they build against the `GET /jobs/{id}` contract defined in the architecture. Evals, images and scanned pages, enhancements, and the submission docs come after the frontend, each in its own phase.
 
 Every external dependency is built behind an interface, with a mock or local adapter as the baseline. The interface and its first adapter are added in the phase that first uses that dependency. Real providers are added later as new adapters, not rewrites. Add a package only in the phase that first puts a file in it; do not scaffold empty directories ahead of that work. Out of scope for this plan: production AWS infrastructure, authentication, and the optional AI feature (considered only after the final acceptance pass).
 
@@ -10,7 +10,7 @@ Primary services/packages/frameworks:
 - **Postgres + SQLAlchemy 2 + Alembic**: job store, results store, and queue in one database; migrations run automatically at startup.
 - **Postgres-backed queue library (Procrastinate or PGQueuer)**: lets the API create and enqueue a job in one transaction, and runs the worker.
 - **pydantic and pydantic-settings**: typed config from environment variables, and the schemas every LLM output is validated against.
-- **PyMuPDF4LLM**: per-page text. A page is marked for image handling in Phase 8 when `get_image_info()` shows an image on that page.
+- **PyMuPDF4LLM**: per-page text. A page is marked for image handling in Phase 11 when `get_image_info()` shows an image on that page.
 - **GLM 4.7 or later through an OpenAI-compatible client**: document summaries and consolidation.
 - **Decision-model classifier**: prompt-injection detection and document type. The provider comes from config.
 - **Bruno**: manual and CLI API testing for every backend endpoint.
@@ -42,10 +42,10 @@ This plan follows the main user/system lifecycle directly:
 | 4         | Worker extracts text per page                                       | Phase 4  |
 | 5         | Worker runs guardrails and flags suspicious documents               | Phase 5  |
 | 6         | Worker summarises each document, then consolidates                  | Phase 6  |
-| 7         | Golden and adversarial evals measure pipeline quality               | Phase 7  |
-| 8         | Worker understands images and scanned pages                         | Phase 8  |
-| 9         | Analyst uploads and resolves rejected files in the UI               | Phase 10 |
-| 10        | Analyst watches progress and reads the report in the UI             | Phase 11 |
+| 7         | Analyst uploads and resolves rejected files in the UI               | Phase 8  |
+| 8         | Analyst watches progress and reads the report in the UI             | Phase 9  |
+| 9         | Golden and adversarial evals measure pipeline quality               | Phase 10 |
+| 10        | Worker understands images and scanned pages                         | Phase 11 |
 
 ## 0. Backend Foundations
 
@@ -281,9 +281,9 @@ Solves flow step 4: the worker reads each document's text, keeping page numbers.
 
 - [x] Choose the PDF library: PyMuPDF4LLM (fastest, AGPL, needs Tesseract for scans) or Docling (MIT, slower, built-in OCR); time both on `samples/` and record the decision.
 - [x] Extract text per page and store it in a `pages` table for citation checks and re-runs.
-- [x] Mark a page for image handling when `get_image_info()` shows an image on that page (done in Phase 8).
+- [x] Mark a page for image handling when `get_image_info()` shows an image on that page (done in Phase 11).
 
-PyMuPDF4LLM reads each page of these born-digital memos in well under a second. The text is stored in `pages`. `needs_image` is set when `page.get_image_info()` lists an image displayed on the page. A short page of text stays unmarked, and so does a blank page. The scanned expert call and the chart page are marked because each displays an image. Phase 8 can render those pages for Tesseract or a vision model. PyMuPDF is AGPL, which is acceptable for this local assignment; a commercial Artifex licence is required if it ships inside a closed product.
+PyMuPDF4LLM reads each page of these born-digital memos in well under a second. The text is stored in `pages`. `needs_image` is set when `page.get_image_info()` lists an image displayed on the page. A short page of text stays unmarked, and so does a blank page. The scanned expert call and the chart page are marked because each displays an image. Phase 11 can render those pages for Tesseract or a vision model. PyMuPDF is AGPL, which is acceptable for this local assignment; a commercial Artifex licence is required if it ships inside a closed product.
 
 ### 4B. Chunking
 
@@ -375,7 +375,7 @@ Solves flow step 6: the job's results contain real key details and a report.
 - [x] Apply datamarking to document text: interleave a marker character through it, and explain in the system prompt that marked text is data, never instructions.
 - [x] Ask the consolidation prompt to list disagreements explicitly instead of a single consensus.
 
-`chunk_output`, `document_combine`, and `consolidation` are in `backend/app/pipeline/prompts.yaml`, each with an id and a version. The system text includes the canary `CANARY-7F3A9C`. A caret is placed between the words of document text before it goes into a prompt (`backend/app/pipeline/datamark.py`), and the system text says that marked text is data. The consolidation prompt tells the model to keep both numbers when two documents disagree, with the file, the page, and the quote for each. Each summary call records `model:prompt id:version` in the worker log. CI runs these checks with the rest of the tests, so a change to `prompts.yaml` fails the build when an id, a version, a placeholder, or the canary is wrong. The scored golden cases stay in phase 7.
+`chunk_output`, `document_combine`, and `consolidation` are in `backend/app/pipeline/prompts.yaml`, each with an id and a version. The system text includes the canary `CANARY-7F3A9C`. A caret is placed between the words of document text before it goes into a prompt (`backend/app/pipeline/datamark.py`), and the system text says that marked text is data. The consolidation prompt tells the model to keep both numbers when two documents disagree, with the file, the page, and the quote for each. Each summary call records `model:prompt id:version` in the worker log. CI runs these checks with the rest of the tests, so a change to `prompts.yaml` fails the build when an id, a version, a placeholder, or the canary is wrong. The scored golden cases stay in phase 10.
 
 ### 6D. Summarise and Consolidate
 
@@ -406,19 +406,111 @@ Each chunk is read for topics, people, companies, places, dates, and notable poi
 
 Suggested commit message: `feat(backend): add LLM document summaries and consolidated report`
 
-## 7. Evals
+## 7. Frontend Foundations
+
+Goal: frontend tooling and a typed API client, ready to build screens.
+
+### 7A. Tooling
+
+- [ ] Add Tailwind CSS and shadcn/ui; add the components needed later (button, card, tabs, progress, alert, dialog).
+- [ ] Add TanStack Query with a query client provider, and a router with routes `/` and `/jobs/:id`.
+
+### 7B. Typed API Client
+
+- [ ] Generate TypeScript types from the backend's OpenAPI schema, with a script to regenerate them.
+- [ ] Add API functions for every job endpoint, mapping the backend error schema to one client error type.
+
+### 7C. Verification Setup
+
+- [ ] Add Playwright with a smoke test that loads `/` against the Compose stack in mock mode.
+- [ ] Run the smoke test in the CI `docker` job.
+
+### 7D. Learning Checkpoint
+
+- [ ] Learning: explain the code changes in small chunks with file names, short snippets, layman explanations, and how generated types keep the frontend in step with the backend.
+
+Suggested commit message: `feat(frontend): add tailwind, shadcn, tanstack query, and typed api client`
+
+## 8. Frontend Upload Flow
+
+Goal: the analyst uploads files and resolves any rejected ones.
+
+Solves flow step 7: landing page, upload, and the three choices for rejected files.
+
+### 8A. Landing Page and Upload
+
+- [ ] Build the landing page: title, a one- or two-line instruction, and a drag-and-drop file input with a file picker.
+- [ ] Validate type, size, and count on the client; let the analyst replace or remove rejected files before upload.
+- [ ] Submit to `POST /jobs` and navigate to `/jobs/{id}`.
+
+### 8B. Rejected Files Screen
+
+- [ ] Show rejected files with reasons, and the three choices: re-upload, continue without them, cancel.
+- [ ] Wire each choice to its endpoint and refresh the job.
+
+### 8C. Tests and Manual Verification
+
+- [ ] Playwright smoke tests: valid upload reaches the progress screen; mixed upload shows the rejected screen; each choice works.
+- [ ] Agentic verification: an agent drives the running UI through each upload case and reports what it sees.
+
+### 8D. Learning Checkpoint
+
+- [ ] Learning: explain the code changes in small chunks with file names, short snippets, layman explanations, and how the UI mirrors the job state machine.
+
+Suggested commit message: `feat(frontend): add upload and rejected-files flow`
+
+## 9. Frontend Progress and Report
+
+Goal: the analyst watches progress and reads the report, and the URL survives refresh.
+
+Solves flow step 8: progress, report, and error states.
+
+### 9A. Progress
+
+- [ ] Poll `GET /jobs/{id}` every 1–2 seconds only while the job is `queued`, `running`, or `consolidating`.
+- [ ] Show a progress bar, each document's state, and flag warnings as soon as they appear.
+- [ ] Decide whether document tabs fill in during progress or the report appears at the end, and record it.
+
+### 9B. Report
+
+- [ ] Transition smoothly from progress into the report.
+- [ ] Overview tab with the consolidated report and excluded files; one tab per document with key details and citations.
+
+### 9C. States and URL
+
+- [ ] Show `failed`, `cancelled`, and `expired` with the reason and a link back to upload; show `404` as "job not found".
+- [ ] Show a global error when the backend is unreachable.
+- [ ] Load any job state directly from `/jobs/{id}` on refresh.
+
+### 9D. Past Summaries
+
+- [ ] Store created job IDs in local storage and list them on the landing page; drop jobs that return `404` or `expired`.
+- [ ] Decide placement (left sidebar or below the upload) and record it.
+
+### 9E. Tests and Manual Verification
+
+- [ ] Playwright smoke tests: upload samples in mock mode, reach the report, refresh on `/jobs/{id}`, open a past summary.
+- [ ] Agentic verification of progress, report tabs, flags, and failure states, with screenshots for the README.
+
+### 9F. Learning Checkpoint
+
+- [ ] Learning: explain the code changes in small chunks with file names, short snippets, layman explanations, and how polling and URL state make the async flow feel fast.
+
+Suggested commit message: `feat(frontend): add progress, report, and past summaries`
+
+## 10. Evals
 
 Goal: measure pipeline quality with golden and adversarial sets, so later prompt or model changes are judged on numbers.
 
-Solves flow step 7: every prompt, model, or provider change can be compared against a baseline.
+Solves flow step 9: every prompt, model, or provider change can be compared against a baseline.
 
-### 7A. Eval Sets
+### 10A. Eval Sets
 
 - [ ] Use `backend/evals/golden.json` and `backend/evals/adversarial.json` as the source of truth; extend them rather than replacing them, and bump `version` when an expectation changes.
 - [ ] Put the canary from `adversarial.json` in every system prompt in `prompts.yaml`.
 - [ ] Load the eval files with Pydantic models, so a malformed case fails before any run.
 
-### 7B. Eval Runner
+### 10B. Eval Runner
 
 - [ ] Add a runner with programmatic scores first: schema validity, entity recall, topic coverage, citation accuracy (quote on cited page), contradiction surfaced, injection resistance, and unsupported claims.
 - [ ] Add an LLM judge for coverage and conciseness, averaged over several runs.
@@ -426,136 +518,44 @@ Solves flow step 7: every prompt, model, or provider change can be compared agai
 - [ ] Compare reasoning modes on and off through the evals before enabling them.
 - [ ] Save results with the model and prompt versions, so runs can be compared.
 
-### 7C. CI and Manual Runs
+### 10C. CI and Manual Runs
 
 - [ ] Run the `ci_mock` cases in CI with the mock provider, checking API behaviour, statuses, schema shape, and programmatic flags.
 - [ ] Run the `real` cases manually; a run passes only if every threshold in both files is met.
 - [ ] Run the evals manually against real models and commit the results file.
 
-### 7D. Learning Checkpoint
+### 10D. Learning Checkpoint
 
 - [ ] Learning: explain the code changes in small chunks with file names, short snippets, layman explanations, and how evals turn model and prompt choices into measured decisions.
 
 Suggested commit message: `feat(backend): add golden and adversarial evals`
 
-## 8. Images and Scanned Pages
+## 11. Images and Scanned Pages
 
 Goal: understand content that is not extractable text.
 
-Solves flow step 8: charts and scanned pages contribute to summaries.
+Solves flow step 10: charts and scanned pages contribute to summaries.
 
-### 8A. Approach Decision
+### 11A. Approach Decision
 
 - [ ] Decide between OCR, a multimodal model, or OCR for scanned text plus a multimodal model for charts; record it.
 - [ ] Render each page stored with `needs_image` and pass the image to Tesseract or a vision model.
 
-### 8B. Implementation
+### 11B. Implementation
 
 - [ ] Render flagged low-text pages to images and process them with the chosen approach behind an adapter.
 - [ ] Feed the resulting text into chunking with the same page numbers.
 - [ ] If OCR needs a system package, add it to the backend image and confirm the Compose stack still starts with one command.
 
-### 8C. Tests and Manual Verification
+### 11C. Tests and Manual Verification
 
-- [ ] Test with the scanned and image-heavy samples; rerun the evals and compare against Phase 7.
+- [ ] Test with the scanned and image-heavy samples; rerun the evals and compare against Phase 10.
 
-### 8D. Learning Checkpoint
+### 11D. Learning Checkpoint
 
 - [ ] Learning: explain the code changes in small chunks with file names, short snippets, layman explanations, and the cost and accuracy trade-offs of the chosen approach.
 
 Suggested commit message: `feat(backend): handle images and scanned pages`
-
-## 9. Frontend Foundations
-
-Goal: frontend tooling and a typed API client, ready to build screens.
-
-### 9A. Tooling
-
-- [ ] Add Tailwind CSS and shadcn/ui; add the components needed later (button, card, tabs, progress, alert, dialog).
-- [ ] Add TanStack Query with a query client provider, and a router with routes `/` and `/jobs/:id`.
-
-### 9B. Typed API Client
-
-- [ ] Generate TypeScript types from the backend's OpenAPI schema, with a script to regenerate them.
-- [ ] Add API functions for every job endpoint, mapping the backend error schema to one client error type.
-
-### 9C. Verification Setup
-
-- [ ] Add Playwright with a smoke test that loads `/` against the Compose stack in mock mode.
-- [ ] Run the smoke test in the CI `docker` job.
-
-### 9D. Learning Checkpoint
-
-- [ ] Learning: explain the code changes in small chunks with file names, short snippets, layman explanations, and how generated types keep the frontend in step with the backend.
-
-Suggested commit message: `feat(frontend): add tailwind, shadcn, tanstack query, and typed api client`
-
-## 10. Frontend Upload Flow
-
-Goal: the analyst uploads files and resolves any rejected ones.
-
-Solves flow step 9: landing page, upload, and the three choices for rejected files.
-
-### 10A. Landing Page and Upload
-
-- [ ] Build the landing page: title, a one- or two-line instruction, and a drag-and-drop file input with a file picker.
-- [ ] Validate type, size, and count on the client; let the analyst replace or remove rejected files before upload.
-- [ ] Submit to `POST /jobs` and navigate to `/jobs/{id}`.
-
-### 10B. Rejected Files Screen
-
-- [ ] Show rejected files with reasons, and the three choices: re-upload, continue without them, cancel.
-- [ ] Wire each choice to its endpoint and refresh the job.
-
-### 10C. Tests and Manual Verification
-
-- [ ] Playwright smoke tests: valid upload reaches the progress screen; mixed upload shows the rejected screen; each choice works.
-- [ ] Agentic verification: an agent drives the running UI through each upload case and reports what it sees.
-
-### 10D. Learning Checkpoint
-
-- [ ] Learning: explain the code changes in small chunks with file names, short snippets, layman explanations, and how the UI mirrors the job state machine.
-
-Suggested commit message: `feat(frontend): add upload and rejected-files flow`
-
-## 11. Frontend Progress and Report
-
-Goal: the analyst watches progress and reads the report, and the URL survives refresh.
-
-Solves flow step 10: progress, report, and error states.
-
-### 11A. Progress
-
-- [ ] Poll `GET /jobs/{id}` every 1–2 seconds only while the job is `queued`, `running`, or `consolidating`.
-- [ ] Show a progress bar, each document's state, and flag warnings as soon as they appear.
-- [ ] Decide whether document tabs fill in during progress or the report appears at the end, and record it.
-
-### 11B. Report
-
-- [ ] Transition smoothly from progress into the report.
-- [ ] Overview tab with the consolidated report and excluded files; one tab per document with key details and citations.
-
-### 11C. States and URL
-
-- [ ] Show `failed`, `cancelled`, and `expired` with the reason and a link back to upload; show `404` as "job not found".
-- [ ] Show a global error when the backend is unreachable.
-- [ ] Load any job state directly from `/jobs/{id}` on refresh.
-
-### 11D. Past Summaries
-
-- [ ] Store created job IDs in local storage and list them on the landing page; drop jobs that return `404` or `expired`.
-- [ ] Decide placement (left sidebar or below the upload) and record it.
-
-### 11E. Tests and Manual Verification
-
-- [ ] Playwright smoke tests: upload samples in mock mode, reach the report, refresh on `/jobs/{id}`, open a past summary.
-- [ ] Agentic verification of progress, report tabs, flags, and failure states, with screenshots for the README.
-
-### 11F. Learning Checkpoint
-
-- [ ] Learning: explain the code changes in small chunks with file names, short snippets, layman explanations, and how polling and URL state make the async flow feel fast.
-
-Suggested commit message: `feat(frontend): add progress, report, and past summaries`
 
 ## 12. Enhancements
 
