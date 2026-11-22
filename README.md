@@ -249,8 +249,7 @@ Stop it with `docker compose down`. Your data stays in Docker volumes. Add `-v` 
 
 ## Demo - Video / Screenshots
 
-<img width="1462" height="825" alt="image" src="https://github.com/user-attachments/assets/a191eb61-36c6-4359-9bff-74f5871a878b" /><img width="800" height="494" alt="happy-path-demo" src="https://github.com/user-attachments/assets/1b95c79e-903b-4724-bddb-33ca813172ad" />
-
+<img width="1462" height="825" alt="image" src="https://github.com/user-attachments/assets/a191eb61-36c6-4359-9bff-74f5871a878b" />
 
 ### 1. Happy Path - PDFs with text and images
 [ai-competitor-landscape.pdf](samples/flows/happy-path/ai-competitor-landscape.pdf) contains images which was successfully analysed and summarized, alongside a few other important documents.
