@@ -16,6 +16,7 @@ from app.adapters.factory import build_classifier, build_llm
 from app.adapters.jobs import PostgresJobRepository
 from app.adapters.mocks.mock_classifier import MockClassifier
 from app.adapters.mocks.mock_llm import MockLLM
+from app.adapters.mocks.mock_vision import MOCK_IMAGE_TEXT, MockPageReader
 from app.adapters.queue import build_queue
 from app.adapters.summary_client import GatewaySummaryClient
 from app.core.config import Settings
@@ -144,6 +145,14 @@ def test_a_discussion_of_prompt_injection_is_not_flagged(migrated_database_url: 
 
 def test_extract_stores_one_chunk_per_sample_page(migrated_database_url: str) -> None:
     asyncio.run(_stores_sample_chunks(migrated_database_url))
+
+
+def test_a_scanned_page_gets_its_text_from_the_reader(migrated_database_url: str) -> None:
+    asyncio.run(_reads_a_scan(migrated_database_url, reader=True))
+
+
+def test_a_scanned_page_stays_empty_without_a_reader(migrated_database_url: str) -> None:
+    asyncio.run(_reads_a_scan(migrated_database_url, reader=False))
 
 
 async def _worker_reaches_succeeded(database_url: str) -> None:
@@ -430,6 +439,48 @@ def _pdf() -> bytes:
     buffer = BytesIO()
     writer.write(buffer)
     return buffer.getvalue()
+
+
+async def _reads_a_scan(database_url: str, *, reader: bool) -> None:
+    engine = create_engine(database_url)
+    repository = PostgresJobRepository(create_session_factory(engine), build_queue(database_url))
+    storage = _Storage()
+    bind_pipeline(
+        DocumentPipeline(
+            repository,
+            MockLLM(),
+            MockClassifier(),
+            storage,
+            delay_seconds=0,
+            chunk_token_budget=2048,
+            reader=MockPageReader() if reader else None,
+        )
+    )
+    try:
+        await _clear(engine)
+        sample = Path(__file__).resolve().parents[2] / "samples" / "expert-call.pdf"
+        with _client(database_url, storage) as client:
+            created = client.post(
+                "/jobs",
+                files=[("files", ("expert-call.pdf", sample.read_bytes(), "application/pdf"))],
+            )
+            job_id = UUID(created.json()["id"])
+            document_id = UUID(client.get(f"/jobs/{job_id}").json()["documents"][0]["id"])
+            await run_document(repository, document_id)
+            pages = await repository.list_pages(document_id)
+            chunks = await repository.list_chunks(document_id)
+            usage = await repository.list_llm_calls(job_id)
+        if reader:
+            assert [page.text for page in pages] == [MOCK_IMAGE_TEXT]
+            assert [chunk.text for chunk in chunks] == [MOCK_IMAGE_TEXT]
+            assert ("mock-vision", "page_image") in {(row.model, row.prompt_id) for row in usage}
+        else:
+            assert [page.text for page in pages] == [""]
+            assert "page_image" not in {row.prompt_id for row in usage}
+    finally:
+        bind_pipeline(None)
+        await _clear(engine)
+        await engine.dispose()
 
 
 class _Storage:

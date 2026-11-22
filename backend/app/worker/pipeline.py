@@ -10,7 +10,9 @@ from app.domain.ports import (
     DocumentProgress,
     FileStorage,
     JobRepository,
+    LLMCall,
     LLMProvider,
+    PageReader,
     StoredChunk,
     StoredGuardrail,
     StoredPage,
@@ -26,6 +28,7 @@ from app.pipeline.steps import (
     extract_text,
     summarise_document,
 )
+from app.pipeline.vision import VisionLimits, read_image_pages
 
 
 def _page_for(excerpt: str, chunks: Sequence[StoredChunk], text: ExtractedText) -> int:
@@ -52,6 +55,8 @@ class DocumentPipeline:
         chunk_token_budget: int,
         flag_threshold: float = 0.7,
         prompts: SystemPromptCatalog | None = None,
+        reader: PageReader | None = None,
+        vision_limits: VisionLimits | None = None,
     ) -> None:
         self._jobs = repository
         self._llm = llm
@@ -60,6 +65,8 @@ class DocumentPipeline:
         self._delay = delay_seconds
         self._chunk_token_budget = chunk_token_budget
         self._flag_threshold = flag_threshold
+        self._reader = reader
+        self._vision_limits = vision_limits
         self._prompts = prompts or load_system_prompts(
             Path(__file__).resolve().parents[1] / "pipeline" / "prompts.yaml"
         )
@@ -144,6 +151,16 @@ class DocumentPipeline:
             data,
             delay_seconds=self._delay if status is DocumentStatus.EXTRACTING else 0,
         )
+        calls: list[LLMCall] = []
+        if self._reader is not None:
+            extracted, calls = await read_image_pages(
+                extracted,
+                data,
+                self._reader,
+                self._prompts,
+                filename=progress.filename,
+                limits=self._vision_limits,
+            )
         await self._jobs.replace_pages(
             document_id,
             [
@@ -165,6 +182,8 @@ class DocumentPipeline:
                 )
             ],
         )
+        if calls:
+            await self._jobs.save_llm_calls(progress.job_id, document_id, calls)
         return extracted
 
     async def build_report(self, job_id: UUID) -> dict[str, Any]:

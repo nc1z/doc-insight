@@ -189,6 +189,23 @@ class LLMProvider(Protocol):
     ) -> LLMResult[SummaryT]: ...
 
 
+@dataclass(frozen=True)
+class PageReading:
+    """What a reader found in the pictures on one page. Empty when there was nothing."""
+
+    text: str
+    call: LLMCall
+
+
+class PageReader(Protocol):
+    """Reads the pictures on a page image: scanned text, charts, infographics.
+
+    The request carries the instructions. A reader only sends it, with the image, to a model.
+    """
+
+    async def read(self, request: LLMRequest, image: bytes) -> PageReading: ...
+
+
 class Classifier(Protocol):
     async def injection_probability(self, text: str) -> float: ...
 

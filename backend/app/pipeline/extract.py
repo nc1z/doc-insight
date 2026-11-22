@@ -1,4 +1,4 @@
-"""Per-page text from a PDF. A page that displays an image is marked for Phase 11."""
+"""Per-page text from a PDF. A page that displays an image is marked, so a page reader can look at it."""
 
 from typing import Any
 

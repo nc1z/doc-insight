@@ -12,6 +12,7 @@ StorageProvider = Literal["s3"]
 QueueProvider = Literal["procrastinate"]
 LlmProvider = Literal["mock", "cloudflare"]
 ClassifierProvider = Literal["mock", "cloudflare", "jev"]
+VisionProvider = Literal["off", "mock", "cloudflare"]
 
 
 class Settings(BaseSettings):
@@ -53,6 +54,18 @@ class Settings(BaseSettings):
     step_timeout_seconds: float = Field(default=60, gt=0)
     chunk_token_budget: int = Field(default=2048, gt=0)
 
+    # Reads pages that show pictures: scans, charts, infographics. Off keeps the text-only
+    # behaviour. The cloudflare provider uses the same account and key as the LLM.
+    vision_provider: VisionProvider = "off"
+    vision_model: str = Field(default="@cf/google/gemma-4-26b-a4b-it", min_length=1)
+    # Most pages read per file. Scans with no text come first. The rest are left unread.
+    vision_max_pages: int = Field(default=16, gt=0)
+    # Pages read at the same time for one file.
+    vision_concurrency: int = Field(default=4, gt=0)
+    vision_dpi: int = Field(default=110, ge=50, le=300)
+    # A page is read only when its pictures cover this share of it. Skips logos and icons.
+    vision_min_image_fraction: float = Field(default=0.05, ge=0, le=1)
+
     classifier_provider: ClassifierProvider = "cloudflare"
     classifier_model: str = Field(default="typesafe/jev", min_length=1)
     classifier_base_url: str = Field(
@@ -80,6 +93,18 @@ class Settings(BaseSettings):
             if missing:
                 required = " and ".join(missing)
                 raise ValueError(f"{required} is required when LLM_PROVIDER is cloudflare")
+        if self.vision_provider == "cloudflare":
+            missing = [
+                name
+                for name, present in (
+                    ("LLM_API_KEY", self.llm_api_key.get_secret_value()),
+                    ("CLOUDFLARE_ACCOUNT_ID", self.cloudflare_account_id),
+                )
+                if not present
+            ]
+            if missing:
+                required = " and ".join(missing)
+                raise ValueError(f"{required} is required when VISION_PROVIDER is cloudflare")
         if self.classifier_provider == "jev" and not self.classifier_api_key.get_secret_value():
             raise ValueError("CLASSIFIER_API_KEY is required when CLASSIFIER_PROVIDER is jev")
         if self.classifier_provider == "cloudflare":

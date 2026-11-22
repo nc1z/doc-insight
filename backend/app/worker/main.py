@@ -1,12 +1,18 @@
 import asyncio
 
-from app.adapters.factory import build_classifier, build_file_storage, build_llm
+from app.adapters.factory import (
+    build_classifier,
+    build_file_storage,
+    build_llm,
+    build_page_reader,
+)
 from app.adapters.jobs import PostgresJobRepository
 from app.adapters.queue import build_queue
 from app.core.config import get_settings
 from app.core.db import create_engine, create_session_factory
 from app.core.logging import configure_logging
 from app.pipeline.prompts import load_system_prompts
+from app.pipeline.vision import VisionLimits
 from app.worker.pipeline import DocumentPipeline
 from app.worker.processing import bind_pipeline
 from app.worker.tasks import bind_jobs, bind_step_timeout
@@ -36,6 +42,13 @@ def main() -> None:
             chunk_token_budget=settings.chunk_token_budget,
             flag_threshold=settings.classifier_flag_threshold,
             prompts=catalog,
+            reader=build_page_reader(settings),
+            vision_limits=VisionLimits(
+                dpi=settings.vision_dpi,
+                min_image_fraction=settings.vision_min_image_fraction,
+                max_pages=settings.vision_max_pages,
+                concurrency=settings.vision_concurrency,
+            ),
         )
     )
     try:

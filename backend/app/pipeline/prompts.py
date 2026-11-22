@@ -13,6 +13,8 @@ from app.pipeline.datamark import MARKER
 _PLACEHOLDER = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}")
 _REQUIRED = ("injection", "document_type")
 _GENERATION = ("chunk_output", "document_combine", "consolidation")
+# Used only when a page reader is on. A catalog without it still loads.
+_OPTIONAL_GENERATION = ("page_image",)
 _QUESTION_TYPES = {"noul", "choice"}
 CANARY = "CANARY-7F3A9C"
 
@@ -89,7 +91,7 @@ def load_system_prompts(path: Path) -> SystemPromptCatalog:
     for prompt_id in _REQUIRED:
         if prompts[prompt_id].question_type is None:
             raise ValueError(f"{path}: system prompt {prompt_id} has no question")
-    for prompt_id in _GENERATION:
+    for prompt_id in (*_GENERATION, *(item for item in _OPTIONAL_GENERATION if item in prompts)):
         system = prompts[prompt_id].system
         if system is None or CANARY not in system or MARKER not in system:
             raise ValueError(f"{path}: system prompt {prompt_id} needs system text")

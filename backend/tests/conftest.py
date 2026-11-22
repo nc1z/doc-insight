@@ -14,8 +14,10 @@ _TEST_PORT = 5433
 
 
 @pytest.fixture(autouse=True)
-def _classifier_provider_for_tests(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("CLASSIFIER_PROVIDER", "mock")
+def _mock_providers_for_tests(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Tests never call a real model, whatever the developer's .env says.
+    for name in ("LLM_PROVIDER", "CLASSIFIER_PROVIDER", "VISION_PROVIDER"):
+        monkeypatch.setenv(name, "mock")
 
 
 def _connect(admin_url: str) -> psycopg.Connection[tuple[object, ...]]:

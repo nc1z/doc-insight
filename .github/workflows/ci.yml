@@ -39,7 +39,7 @@ jobs:
 
       - run: pnpm lint
 
-      - run: cp .env.example .env && sed -i 's/^CLASSIFIER_PROVIDER=.*/CLASSIFIER_PROVIDER=mock/' .env
+      - run: cp .env.example .env && sed -i -E 's/^(LLM|CLASSIFIER|VISION)_PROVIDER=.*/\1_PROVIDER=mock/' .env
 
       - run: docker compose up -d postgres-test --wait
 
@@ -50,7 +50,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - run: cp .env.example .env && sed -i 's/^CLASSIFIER_PROVIDER=.*/CLASSIFIER_PROVIDER=mock/' .env
+      - run: cp .env.example .env && sed -i -E 's/^(LLM|CLASSIFIER|VISION)_PROVIDER=.*/\1_PROVIDER=mock/' .env
 
       - run: docker compose up -d --build --wait
 

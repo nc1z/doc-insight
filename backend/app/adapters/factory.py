@@ -7,11 +7,13 @@ from app.adapters.decision_model import CloudflareClassifier, DecisionModelClass
 from app.adapters.jobs import PostgresJobRepository
 from app.adapters.mocks.mock_classifier import MockClassifier
 from app.adapters.mocks.mock_llm import MockLLM
+from app.adapters.mocks.mock_vision import MockPageReader
 from app.adapters.queue import build_queue
 from app.adapters.s3 import S3FileStorage
 from app.adapters.summary_client import GatewaySummaryClient
+from app.adapters.vision_client import GatewayPageReader
 from app.core.config import Settings
-from app.domain.ports import Classifier, FileStorage, JobRepository, LLMProvider
+from app.domain.ports import Classifier, FileStorage, JobRepository, LLMProvider, PageReader
 
 StorageBuilder = Callable[[Settings], FileStorage]
 JobRepositoryBuilder = Callable[[async_sessionmaker[AsyncSession], Settings], JobRepository]
@@ -87,6 +89,28 @@ _CLASSIFIER_ADAPTERS: dict[str, ClassifierBuilder] = {
     "cloudflare": CloudflareClassifier.from_settings,
     "jev": DecisionModelClassifier.from_settings,
 }
+
+
+PageReaderBuilder = Callable[[Settings], PageReader | None]
+
+# "off" builds nothing: the worker then skips image pages, as it did before readers existed.
+_PAGE_READERS: dict[str, PageReaderBuilder] = {
+    "off": lambda settings: None,
+    "mock": MockPageReader.from_settings,
+    "cloudflare": GatewayPageReader.from_settings,
+}
+
+
+def register_page_reader(provider: str, builder: PageReaderBuilder) -> None:
+    _PAGE_READERS[provider] = builder
+
+
+def build_page_reader(settings: Settings) -> PageReader | None:
+    try:
+        builder = _PAGE_READERS[settings.vision_provider]
+    except KeyError:
+        raise ValueError(f"Unknown vision provider: {settings.vision_provider}") from None
+    return builder(settings)
 
 
 def build_llm(settings: Settings) -> LLMProvider:

@@ -41,6 +41,12 @@ _ENV_KEYS = (
     "CLASSIFIER_TIMEOUT_SECONDS",
     "CLASSIFIER_FLAG_THRESHOLD",
     "SYSTEM_PROMPTS_PATH",
+    "VISION_PROVIDER",
+    "VISION_MODEL",
+    "VISION_MAX_PAGES",
+    "VISION_CONCURRENCY",
+    "VISION_DPI",
+    "VISION_MIN_IMAGE_FRACTION",
 )
 
 
@@ -127,6 +133,35 @@ def test_cloudflare_requires_api_key_and_account(monkeypatch: pytest.MonkeyPatch
 
     with pytest.raises(ValidationError, match="CLASSIFIER_API_KEY and CLOUDFLARE_ACCOUNT_ID"):
         Settings(_env_file=None, classifier_provider="cloudflare")
+
+
+def test_vision_is_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    _clear_env(monkeypatch)
+
+    settings = Settings(_env_file=None, classifier_provider="mock")
+
+    assert settings.vision_provider == "off"
+    assert settings.vision_model == "@cf/google/gemma-4-26b-a4b-it"
+    assert settings.vision_max_pages == 16
+    assert settings.vision_concurrency == 4
+    assert settings.vision_dpi == 110
+    assert settings.vision_min_image_fraction == 0.05
+
+
+def test_cloudflare_vision_requires_api_key_and_account(monkeypatch: pytest.MonkeyPatch) -> None:
+    _clear_env(monkeypatch)
+
+    with pytest.raises(ValidationError, match="LLM_API_KEY and CLOUDFLARE_ACCOUNT_ID"):
+        Settings(_env_file=None, classifier_provider="mock", vision_provider="cloudflare")
+
+    settings = Settings(
+        _env_file=None,
+        classifier_provider="mock",
+        vision_provider="cloudflare",
+        llm_api_key="test-key",
+        cloudflare_account_id="acct",
+    )
+    assert settings.vision_provider == "cloudflare"
 
 
 def test_jev_requires_api_key(monkeypatch: pytest.MonkeyPatch) -> None:

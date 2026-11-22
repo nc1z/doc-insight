@@ -1,6 +1,6 @@
 # PLAN: doc-insight
 
-This plan builds doc-insight in phases, following [architecture.md](architecture.md) and [PRD.md](PRD.md). The backend comes first: foundations, then the upload and job API, then a worker running a mocked pipeline end to end, then real extraction, guardrails, and LLM steps. Every backend phase is testable through Bruno before any UI exists. The frontend phases come next, and they build against the `GET /jobs/{id}` contract defined in the architecture. Evals, images and scanned pages, enhancements, and the submission docs come after the frontend, each in its own phase.
+This plan builds doc-insight in phases, following [architecture.md](architecture.md) and [PRD.md](PRD.md). The backend comes first: foundations, then the upload and job API, then a worker running a mocked pipeline end to end, then real extraction, guardrails, and LLM steps. Every backend phase is testable through Bruno before any UI exists. The frontend phases come next, and they build against the `GET /jobs/{id}` contract defined in the architecture. Images and scanned pages and the submission docs come after the frontend, each in its own phase. Evals and further enhancements are listed at the end as future enhancements.
 
 Every external dependency is built behind an interface, with a mock or local adapter as the baseline. The interface and its first adapter are added in the phase that first uses that dependency. Real providers are added later as new adapters, not rewrites. Add a package only in the phase that first puts a file in it; do not scaffold empty directories ahead of that work. Out of scope for this plan: production AWS infrastructure, authentication, and the optional AI feature (considered only after the final acceptance pass).
 
@@ -10,7 +10,7 @@ Primary services/packages/frameworks:
 - **Postgres + SQLAlchemy 2 + Alembic**: job store, results store, and queue in one database; migrations run automatically at startup.
 - **Postgres-backed queue library (Procrastinate or PGQueuer)**: lets the API create and enqueue a job in one transaction, and runs the worker.
 - **pydantic and pydantic-settings**: typed config from environment variables, and the schemas every LLM output is validated against.
-- **PyMuPDF4LLM**: per-page text. A page is marked for image handling in Phase 11 when `get_image_info()` shows an image on that page.
+- **PyMuPDF4LLM**: per-page text. A page is marked for image handling in Phase 10 when `get_image_info()` shows an image on that page.
 - **GLM 4.7 or later through an OpenAI-compatible client**: document summaries and consolidation.
 - **Decision-model classifier**: prompt-injection detection and document type. The provider comes from config.
 - **Bruno**: manual and CLI API testing for every backend endpoint.
@@ -44,8 +44,7 @@ This plan follows the main user/system lifecycle directly:
 | 6         | Worker summarises each document, then consolidates                  | Phase 6  |
 | 7         | Analyst uploads and resolves rejected files in the UI               | Phase 8  |
 | 8         | Analyst watches progress and reads the report in the UI             | Phase 9  |
-| 9         | Golden and adversarial evals measure pipeline quality               | Phase 10 |
-| 10        | Worker understands images and scanned pages                         | Phase 11 |
+| 9         | Worker understands images and scanned pages                         | Phase 10 |
 
 ## 0. Backend Foundations
 
@@ -281,9 +280,9 @@ Solves flow step 4: the worker reads each document's text, keeping page numbers.
 
 - [x] Choose the PDF library: PyMuPDF4LLM (fastest, AGPL, needs Tesseract for scans) or Docling (MIT, slower, built-in OCR); time both on `samples/` and record the decision.
 - [x] Extract text per page and store it in a `pages` table for citation checks and re-runs.
-- [x] Mark a page for image handling when `get_image_info()` shows an image on that page (done in Phase 11).
+- [x] Mark a page for image handling when `get_image_info()` shows an image on that page (done in Phase 10).
 
-PyMuPDF4LLM reads each page of these born-digital memos in well under a second. The text is stored in `pages`. `needs_image` is set when `page.get_image_info()` lists an image displayed on the page. A short page of text stays unmarked, and so does a blank page. The scanned expert call and the chart page are marked because each displays an image. Phase 11 can render those pages for Tesseract or a vision model. PyMuPDF is AGPL, which is acceptable for this local assignment; a commercial Artifex licence is required if it ships inside a closed product.
+PyMuPDF4LLM reads each page of these born-digital memos in well under a second. The text is stored in `pages`. `needs_image` is set when `page.get_image_info()` lists an image displayed on the page. A short page of text stays unmarked, and so does a blank page. The scanned expert call and the chart page are marked because each displays an image. Phase 10 can render those pages for Tesseract or a vision model. PyMuPDF is AGPL, which is acceptable for this local assignment; a commercial Artifex licence is required if it ships inside a closed product.
 
 ### 4B. Chunking
 
@@ -507,103 +506,51 @@ The home page is still one screen (`frontend/src/pages/home.tsx`). A hamburger a
 
 Suggested commit message: `feat(frontend): add progress, report, and past summaries`
 
-## 10. Evals
-
-Goal: measure pipeline quality with golden and adversarial sets, so later prompt or model changes are judged on numbers.
-
-Solves flow step 9: every prompt, model, or provider change can be compared against a baseline.
-
-### 10A. Eval Sets
-
-- [ ] Use `backend/evals/golden.json` and `backend/evals/adversarial.json` as the source of truth; extend them rather than replacing them, and bump `version` when an expectation changes.
-- [ ] Put the canary from `adversarial.json` in every system prompt in `prompts.yaml`.
-- [ ] Load the eval files with Pydantic models, so a malformed case fails before any run.
-
-### 10B. Eval Runner
-
-- [ ] Add a runner with programmatic scores first: schema validity, entity recall, topic coverage, citation accuracy (quote on cited page), contradiction surfaced, injection resistance, and unsupported claims.
-- [ ] Add an LLM judge for coverage and conciseness, averaged over several runs.
-- [ ] Add a short human spot-check checklist for the sample outputs.
-- [ ] Compare reasoning modes on and off through the evals before enabling them.
-- [ ] Save results with the model and prompt versions, so runs can be compared.
-
-### 10C. CI and Manual Runs
-
-- [ ] Run the `ci_mock` cases in CI with the mock provider, checking API behaviour, statuses, schema shape, and programmatic flags.
-- [ ] Run the `real` cases manually; a run passes only if every threshold in both files is met.
-- [ ] Run the evals manually against real models and commit the results file.
-
-### 10D. Learning Checkpoint
-
-- [ ] Learning: explain the code changes in small chunks with file names, short snippets, layman explanations, and how evals turn model and prompt choices into measured decisions.
-
-Suggested commit message: `feat(backend): add golden and adversarial evals`
-
-## 11. Images and Scanned Pages
+## 10. Images and Scanned Pages
 
 Goal: understand content that is not extractable text.
 
-Solves flow step 10: charts and scanned pages contribute to summaries.
+Solves flow step 9: charts and scanned pages contribute to summaries.
 
-### 11A. Approach Decision
+### 10A. Approach Decision
 
-- [ ] Decide between OCR, a multimodal model, or OCR for scanned text plus a multimodal model for charts; record it.
-- [ ] Render each page stored with `needs_image` and pass the image to Tesseract or a vision model.
+- [x] Decide between OCR, a multimodal model, or OCR for scanned text plus a multimodal model for charts; record it.
+- [x] Render each page stored with `needs_image` and pass the image to Tesseract or a vision model.
 
-### 11B. Implementation
+### 10B. Implementation
 
-- [ ] Render flagged low-text pages to images and process them with the chosen approach behind an adapter.
-- [ ] Feed the resulting text into chunking with the same page numbers.
-- [ ] If OCR needs a system package, add it to the backend image and confirm the Compose stack still starts with one command.
+- [x] Render flagged low-text pages to images and process them with the chosen approach behind an adapter.
+- [x] Feed the resulting text into chunking with the same page numbers.
+- [x] If OCR needs a system package, add it to the backend image and confirm the Compose stack still starts with one command. (Not needed: the vision model is called through Cloudflare.)
 
-### 11C. Tests and Manual Verification
+The `PageReader` port reads a page image and returns text. `GatewayPageReader` sends it to `VISION_MODEL` on Cloudflare, `MockPageReader` returns a fixed line, and `VISION_PROVIDER=off` (the default) builds no reader. `read_image_pages` runs inside the extract step: it renders pages that cover enough of the page with pictures, reads up to `VISION_MAX_PAGES` of them (scans first, `VISION_CONCURRENCY` at a time), and appends the text to the page before chunks are stored. Usage rows are saved under the `page_image` prompt.
 
-- [ ] Test with the scanned and image-heavy samples; rerun the evals and compare against Phase 10.
+### 10C. Tests and Manual Verification
 
-### 11D. Learning Checkpoint
+- [ ] Test with the scanned and image-heavy samples.
+
+### 10D. Learning Checkpoint
 
 - [ ] Learning: explain the code changes in small chunks with file names, short snippets, layman explanations, and the cost and accuracy trade-offs of the chosen approach.
 
 Suggested commit message: `feat(backend): handle images and scanned pages`
 
-## 12. Enhancements
-
-Goal: good-to-have improvements from the architecture, built only once the core is green.
-
-### 12A. Retries
-
-- [ ] Exponential backoff with jitter for timeouts, `429`, and `5xx`; honour `Retry-After`; cap attempts; never retry permanent failures.
-
-### 12B. Document Caching
-
-- [ ] Cache document results by file hash plus pipeline version (model, prompt, schema); cache consolidation by the set of hashes.
-
-### 12C. Download
-
-- [ ] Add a download button exporting the summaries; decide Markdown, PDF, or both.
-
-### 12D. Learning Checkpoint
-
-- [ ] Learning: explain the code changes in small chunks with file names, short snippets, layman explanations, and how each enhancement helps the system scale.
-
-Suggested commit message: `feat: add retries, caching, and report download`
-
-## 13. README and Submission Docs
+## 11. README and Submission Docs
 
 Goal: the repo explains itself to a reviewer.
 
-### 13A. README
+### 11A. README
 
 - [ ] Solution overview, architecture diagram, setup instructions, screenshots of generated outputs, assumptions, and known limitations.
 - [ ] Design decisions: output schema, model choice, chunking strategy, and async processing.
 - [ ] Assumptions grouped by task, one section per task.
 - [ ] CI badge and a link to `samples/`.
 
-### 13B. Clean-Machine Check
+### 11B. Clean-Machine Check
 
 - [ ] Fresh clone, `cp .env.example .env`, `docker compose up`, upload the samples; everything works in mock mode and with a real key.
 
-### 13C. Learning Checkpoint
+### 11C. Learning Checkpoint
 
 - [ ] Learning: explain the code changes in small chunks with file names, short snippets, layman explanations, and how the docs map to each required deliverable.
 
@@ -638,3 +585,48 @@ Goal: Prove the whole feature is correct, usable, observable, and safe enough to
 - [ ] Learning: explain the full feature end to end with final code paths, diagrams when helpful, manual test commands, infrastructure involved, and tradeoffs learned.
 
 Suggested commit message: `chore: complete acceptance pass`
+
+## Future Enhancements
+
+Good-to-have work, kept here until it is scheduled.
+
+### Evals
+
+Measure pipeline quality with golden and adversarial sets, so a prompt or model change is judged on numbers. The sets already exist in `backend/evals/`.
+
+**Eval sets**
+
+- Use `backend/evals/golden.json` and `backend/evals/adversarial.json` as the source of truth; extend them rather than replacing them, and bump `version` when an expectation changes.
+- Put the canary from `adversarial.json` in every system prompt in `prompts.yaml`.
+- Load the eval files with Pydantic models, so a malformed case fails before any run.
+
+**Eval runner**
+
+- Add a runner with programmatic scores first: schema validity, entity recall, topic coverage, citation accuracy (quote on cited page), contradiction surfaced, injection resistance, and unsupported claims.
+- Add an LLM judge for coverage and conciseness, averaged over several runs.
+- Add a short human spot-check checklist for the sample outputs.
+- Compare reasoning modes on and off through the evals before enabling them.
+- Save results with the model and prompt versions, so runs can be compared.
+
+**CI and manual runs**
+
+- Run the `ci_mock` cases in CI with the mock provider, checking API behaviour, statuses, schema shape, and programmatic flags.
+- Run the `real` cases manually; a run passes only if every threshold in both files is met.
+- Run the evals manually against real models and commit the results file.
+
+### Retries
+
+Already in place (`backend/app/worker/processing.py`): each document step is tried up to 3 times, with full-jitter exponential backoff between tries. A timeout counts as transient. A permanent failure fails the document at once: a corrupt file, a summary that still does not match the schema after its output retries, or a request the vision service rejects.
+
+Still to do:
+
+- Honour `Retry-After` when the provider sends it on `429` and `5xx`.
+- Tell retryable HTTP statuses (`429`, `5xx`, timeouts) apart from other `4xx` answers in the LLM and classifier adapters, as the vision adapter already does. Today any HTTP error from those two waits through all three tries, even a bad request or a retired model.
+
+### Document Caching
+
+- Cache document results by file hash plus pipeline version (model, prompt, schema); cache consolidation by the set of hashes.
+
+### Download
+
+- Add a download button exporting the summaries; decide Markdown, PDF, or both.

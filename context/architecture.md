@@ -19,7 +19,7 @@ flowchart LR
         Worker --> Files
     end
 
-    Worker --> LLM{{LLM provider}}
+    Worker --> LLM{{LLM provider<br/>text and vision models}}
 ```
 
 The API and the worker are separate containers from the same image. The API container runs the HTTP server. The worker container runs `python -m app.worker` and claims queue tasks. Processing capacity is the worker: it reads files from MinIO and writes status back to Postgres, so a long job stays off the process that serves uploads and polls. Extra worker containers add processing capacity without extra API containers. The two containers meet only through Postgres and MinIO.
@@ -325,7 +325,7 @@ flowchart TD
     Enqueue[Create or confirm<br/>one queue task per stored document] --> Extract
 
     subgraph PerDoc[Document task, one per file, in parallel]
-        Extract[Extract<br/>text per page, images, OCR fallback] --> Checks[Programmatic guardrails<br/>injection patterns, hidden text,<br/>invisible characters]
+        Extract[Extract<br/>text per page, then read picture<br/>pages with a vision model] --> Checks[Programmatic guardrails<br/>injection patterns, hidden text,<br/>invisible characters]
         Checks --> Classifier[Decision-model guardrail<br/>injection classifier]
         Classifier --> Summarise[Document summary<br/>chunk, summarise, combine]
         Summarise --> ValidateDoc[Output validation<br/>schema, citations]
@@ -357,6 +357,7 @@ Document text is untrusted data. Guardrails run in layers, cheapest first.
 - **Datamarking (spotlighting)**: document text in prompts has a special marker character interleaved through it, and the system prompt explains that marked text is data and must never be followed as instructions. Delimiters alone can be faked by an attacker; datamarking is far more resistant.
 - **No tools for the LLM**: the pipeline's model only returns JSON and cannot take actions, so a successful injection can distort output but cannot trigger anything.
 - **Output validation**: every LLM response is checked against its schema and retried on invalid output. Citations are checked programmatically: the cited page must contain the quoted text.
+- **Text read from images is untrusted too.** It joins the page text before the checks run, so the classifier checks it and prompts datamark it like any other text. A vision model is told to treat everything in the picture as data. Its output only becomes page text and is never used as an instruction.
 - **Flagged documents** are marked on the job and shown in the UI with a warning, never dropped silently. Flags carry forward into consolidation and appear in the report, because injected content can still travel through a document's summary.
 
 ### Document summary
@@ -364,13 +365,39 @@ Document text is untrusted data. Guardrails run in layers, cheapest first.
 - Each document is summarised separately, in parallel, as its own queue task. The payload is the document id.
 - Long documents are split into chunks. Each chunk returns structured fields: topics, entities, and notable points with a page and a quote. The last call reads those fields and writes the document summary (map-reduce), within a configurable token budget. A prose summary of a chunk drops facts the last call never sees.
 - The combine step also receives relevant source excerpts alongside those structured fields, which improves faithfulness and reduces hallucination.
-- The output follows the per-document schema: title, inferred type, short summary, main topics, key entities, and notable points, each with a page number and a supporting quote. Entities are grouped into people, organisations, locations, and dates. Each entity has a name and optional aliases.
+- The output follows the per-document schema, written to be read quickly and to stay short:
+  - `title`: the document's name in at most six words, and `inferred_type`.
+  - `summary`: one sentence of at most 12 words, the most important idea. The UI shows it as the headline.
+  - `key_points`: exactly three one-line points of at most 14 words, each with a fact or a number.
+  - `sections`: two or three sections, each with a heading of at most four words, two or three short paragraphs of one or two sentences, and at most one pull quote.
+  - `topics`: up to five tags of one or two words.
+  - `entities`: people, organisations, locations, and dates. Each entity has a name and optional aliases.
+  - `notable_points`: each with a page number and a supporting quote.
+- The schema limits are a guard a little above what the prompt asks for. A longer answer goes back to the model to shorten.
+- A pull quote on a section is kept only when it appears on the page it cites. A quote that fails the check is dropped and the section still shows.
+
+### Images and scanned pages
+
+Extraction marks a page `needs_image` when it displays a picture. A scan is one picture and a chart sits next to text, so a text extractor alone misses them.
+
+- **A vision model called through Cloudflare reads the page.** The page is rendered to a PNG and sent, with instructions, to a vision-capable chat model on the same Cloudflare account and key as the LLM. We run no model ourselves, and one path serves scans and charts. OCR such as Tesseract would need a system package and still could not read a chart.
+- **It sits behind a port.** `PageReader` takes a request and a page image and returns text. `GatewayPageReader` is the Cloudflare adapter and `MockPageReader` needs no model. `VISION_PROVIDER` selects one (`off`, `mock`, or `cloudflare`) through the factory, and another reader can be registered without touching the pipeline. `off` is the default and keeps the earlier text-only behaviour.
+- **Where it runs.** Inside the extract step, after the text layer is read and before pages and chunks are stored. The reader's text is added to the page, so chunking, the safety check, summaries, and quote checks run unchanged. A scan with no text gets the transcript as its text. A page with text gets the image content appended under a short label, and the model is given the page's own text so it does not repeat it.
+- **Which pages.** A page is read only when its pictures cover at least `VISION_MIN_IMAGE_FRACTION` of it, which skips logos and icons. At most `VISION_MAX_PAGES` pages are read per file, scans with no text first, `VISION_CONCURRENCY` at a time. A long scan beyond the cap is left partly unread and a warning is logged.
+- **Failures are not hidden.** A reader error is not swallowed. The step retries, then the file fails, because a summary that ignores a chart is worse than a failed file. A request the service rejects as invalid, such as a retired model, fails at once and the log names `VISION_MODEL`.
+- **Model.** `VISION_MODEL` defaults to `@cf/google/gemma-4-26b-a4b-it`. Providers retire models from time to time, so it is configuration and never fixed in code. The model read the sample chart and the scanned slip correctly. A page costs about $0.0002 and takes 5 to 13 seconds.
+- **Limit.** The quote check proves a quote is in the transcript, not that the model read the picture correctly. A misread digit in a chart would pass it.
 
 ### Consolidated summary
 
 - Runs once, as its own queue task, when every stored document has succeeded. A failed document blocks that task until the analyst retries it or continues without it. The document task that finds this, while holding the job row lock, inserts the consolidation task, whose payload is the job id, in the same transaction.
 - Its input is the validated document summaries, not the raw text. This keeps the prompt small and limits how far injected content can travel.
-- The output follows the report schema: overall summary, common themes, contradictions, combined entities, takeaways, flagged documents, and excluded files.
+- The output follows the report schema, with the same limits on length:
+  - `summary`: one sentence of at most 12 words, the headline.
+  - `takeaways`: exactly five one-line points that read in order like a short story: what the documents cover, what they agree on, what matters most, where they differ, what to watch.
+  - `sections`: three to five sections of further reading, one per theme, shaped like a document section. Disagreements stay out of the sections and go in `contradictions`.
+  - `themes`: up to five tags, then `entities`, `flagged_documents`, and `excluded_files`.
+- A pull quote on a report section is kept only when a document summary already holds it as a checked quote.
 - **Contradictions are surfaced, not merged.** LLMs tend to collapse conflicting facts into one consensus value. The prompt asks for disagreements explicitly, and each contradiction holds exactly two claims. Each claim has its text, the document, the page, and a quote.
 
 ### Evaluation
@@ -401,24 +428,21 @@ Each step picks its model through configuration (strategy pattern). The pipeline
 - **Decisions: [Jev](https://typesafe.ai/blog/introducing-system-one-models-and-jev)** (TypeSafe AI). A non-generative decision model: it takes text plus typed questions and returns a fixed option, a rubric score, or a yes/no probability, with calibrated confidence. Outputs are type-safe by construction, it is very fast, and input costs about $0.04 per million tokens with free output. Used for:
   - Prompt-injection detection per chunk (yes/no probability). A chunk above `CLASSIFIER_FLAG_THRESHOLD` (default 0.7) marks the document flagged.
   - Inferred document type (choice from a fixed list).
-- **Generation: GLM 4.7 or later** (Z.AI). Used for document summaries and consolidation, where the output is free text inside a schema (summaries, entities, themes, contradictions).
-  - Request JSON output, then validate it against the Pydantic schema and retry on invalid output.
-  - GLM 4.7 honours JSON mode, which guarantees valid JSON but not the schema's shape. Newer GLM versions support schema-constrained output, which reduces retries.
+- **Generation: DeepSeek V4.1 Flash**, set by `LLM_MODEL` (currently `@cf/deepseek-ai/deepseek-v4.1-flash-1017`). Used for document summaries and consolidation, where the output is free text inside a schema (summaries, entities, themes, contradictions).
+  - The schema goes in the prompt. Pydantic AI checks the reply and asks again, up to `LLM_OUTPUT_RETRIES`, when it does not match.
+  - A model call stops at `LLM_TIMEOUT_SECONDS` (180). A whole document step stops at `STEP_TIMEOUT_SECONDS` (300). Chunk calls for one file still run one after another inside that step.
+- **Vision: a vision model called through Cloudflare**, set by `VISION_MODEL` (see Images and scanned pages). It only transcribes pages. It does not summarise.
 - **Limits**: Jev cannot write summaries or extract free-text entities, and its input is capped at 32k tokens per request, which fits chunk-level checks. A valid typed answer can still be wrong, so its thresholds are tuned on the adversarial eval set.
-- **Swappable**: Jev sits behind the classifier interface and GLM behind the LLM adapter, so either can be replaced through configuration. The mock adapters remain the default for tests and CI.
+- **Swappable**: Jev sits behind the classifier interface, the summary model behind the LLM adapter, and the vision model behind the page reader, so each can be replaced through configuration. The mock adapters remain the default for tests and CI.
 
 ### Stored in Postgres
 
-- Extracted text per page in `pages`, kept for citation checks and re-runs. `needs_image` is set when `page.get_image_info()` lists an image displayed on the page. A short page of text stays unmarked, and so does a blank page. Phase 11 renders a marked page for Tesseract or a vision model.
+- Extracted text per page in `pages`, kept for citation checks and re-runs. `needs_image` is set when `page.get_image_info()` lists an image displayed on the page. A short page of text stays unmarked, and so does a blank page. For a marked page that the vision step read, the stored text includes what the model found in the pictures.
 - Chunks of that page text in `chunks`. Each chunk carries its page number and does not cross a page. `CHUNK_TOKEN_BUDGET` defaults to 2048 cl100k tokens, enough for a full page of text. A denser page splits inside that page.
 - Programmatic guardrail findings in `guardrail_results`. Each row is the page, the rule, and a short excerpt. The rules are an injection phrase, a fake role marker, invisible characters, a long encoded blob, and text drawn in white or at a tiny size. A classifier row is added when a chunk's probability is above the threshold. A phrase or a role marker is recorded and does not, by itself, mark the document flagged.
 - Document summaries and the consolidated report, as validated JSON.
-- Telemetry per LLM call in `llm_calls`: model, prompt id and version, input tokens, output tokens, and latency. `GET /admin/usage` returns those calls. `GET /jobs/{id}` stays the status and the results the frontend polls.
+- Telemetry per LLM call in `llm_calls`: model, prompt id and version, input tokens, output tokens, and latency. Each page read by the vision model is a call under the `page_image` prompt. `GET /admin/usage` returns those calls. `GET /jobs/{id}` stays the status and the results the frontend polls.
 - Status of each step, so a retried job resumes from the last completed step.
-
-### Pipeline open decisions
-
-- **GLM version**: GLM 4.7 with JSON mode and validation, or a newer version with schema-constrained output.
 
 ## UI/UX
 
@@ -436,24 +460,26 @@ flowchart LR
 ### Landing page
 
 - A title, a one- or two-line instruction, and a file upload input (drag-and-drop and file picker).
-- Past summaries are listed in a left sidebar. A hamburger at the top left opens and closes it, and the browser remembers that choice.
+- Past summaries are listed in a left sidebar. A button opens and closes it, and the browser remembers that choice. Each entry is labelled with the start of that report's headline, falls back to the first file name while the job runs, and has a three-dot menu to delete it. A footer button clears all.
 
 ### Progress
 
-- A progress bar for the whole job, plus the state of each document.
+- A progress bar for the whole job, a step indicator (read, check, summarise, consolidate), and the state of each document. The consolidating step has its own screen when the bar reaches 100 percent, because writing the report is one more step.
+- An elapsed-time counter runs beside the file count while the job works. The browser keeps it, because the API sends no timestamps, and it disappears when the report shows.
 - Warnings on flagged documents appear as soon as they are detected.
 
 ### Report
 
 - While the job is queued, running, or consolidating, the page shows progress. When the job succeeds, that progress is replaced by the report.
-- The report is concise and split into tabs:
-  - **Overview**: the consolidated report, including any files the analyst chose to exclude.
-  - **One tab per document**: that document's key details, with citations.
+- The report is concise and split into tabs, and each tab reads like a short slide deck:
+  - **Overview**: a large one-line headline, five numbered points, then "Further reading" with a heading per topic and short paragraphs, with pull quotes between them. Where documents disagree, both claims sit under the topic as indented quotes with the file and page. Then theme tags, and last a plain bullet list of metadata: documents, people, organisations, locations, dates, flagged files, and files left out.
+  - **One tab per document**: a one-line headline, three points, reading with pull quotes, topic tags, and metadata bullets. The metadata has no cards or tables.
+- The UI draws the report from structured fields, not markdown. A report saved before the structured fields shows through a fallback that splits its long summary into a headline and short paragraphs.
 - A download button exports the summaries (good to have).
 
 ### One page
 
-- The analyst stays on `/`. Upload, rejected files, progress, and the report replace one another on that page.
+- Upload, rejected files, progress, and the report replace one another in one shell. Once a job starts the address is `/jobs/<id>`, so a refresh keeps the analyst on that job's progress or report. The server already falls back to the app for that path, and the browser history handles back and forward.
 
 ### Past summaries
 
@@ -483,6 +509,8 @@ Good to have for scaling the system.
 - The event payload keeps the same shape as the `GET /jobs/{id}` response, so the UI changes only how it receives updates.
 
 ### Retries
+
+Built: the worker retries a step up to 3 times with full-jitter backoff, treats a timeout as transient, and fails a document at once on a permanent error. Not built: honouring `Retry-After`, and telling retryable HTTP statuses from other `4xx` answers in the LLM and classifier adapters (the vision adapter does this already). The points below are the target.
 
 - **Exponential backoff with jitter** on transient failures: timeouts, rate limits (`429`), and provider `5xx` errors. Each step is limited by `STEP_TIMEOUT_SECONDS`. Jitter spreads retries out so workers do not all retry at the same moment.
 - Honour the provider's `Retry-After` header when it is present.
