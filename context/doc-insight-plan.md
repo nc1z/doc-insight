@@ -441,23 +441,24 @@ Solves flow step 7: landing page, upload, and the three choices for rejected fil
 
 ### 8A. Landing Page and Upload
 
-- [ ] Build the landing page: title, a one- or two-line instruction, and a drag-and-drop file input with a file picker.
-- [ ] Validate type, size, and count on the client; let the analyst replace or remove rejected files before upload.
-- [ ] Submit to `POST /jobs` and show that job on the home page.
+- [x] Build the landing page: title, a one- or two-line instruction, and a drag-and-drop file input with a file picker.
+- [x] Validate type, size, and count on the client; let the analyst replace or remove rejected files before upload.
+- [x] Submit to `POST /jobs` and show that job on the home page.
 
 ### 8B. Rejected Files Screen
 
-- [ ] Show rejected files with reasons, and the three choices: re-upload, continue without them, cancel.
-- [ ] Wire each choice to its endpoint and refresh the job.
+- [x] Show rejected files with reasons, and the three choices: re-upload, continue without them, cancel.
+- [x] Wire each choice to its endpoint and refresh the job.
 
 ### 8C. Tests and Manual Verification
 
-- [ ] Playwright smoke tests: valid upload reaches the progress screen; mixed upload shows the rejected screen; each choice works.
-- [ ] Agentic verification: an agent drives the running UI through each upload case and reports what it sees.
+- [x] Playwright smoke tests: valid upload reaches the progress screen; mixed upload shows the rejected screen; each choice works.
 
 ### 8D. Learning Checkpoint
 
-- [ ] Learning: explain the code changes in small chunks with file names, short snippets, layman explanations, and how the UI mirrors the job state machine.
+- [x] Learning: explain the code changes in small chunks with file names, short snippets, layman explanations, and how the UI mirrors the job state machine.
+
+The home page is one screen (`frontend/src/pages/home.tsx`). A large title and a one-line instruction sit above a wide drop zone. A file that is not a PDF, is over the size limit, or is one of too many files stays on that zone with the reason (`frontend/src/upload/files.ts`). A valid drop calls `createJob` at once and the zone goes away. The page then lists each file and its state. When the API leaves files out, the page names each one with the reason and offers re-upload, continue, and cancel. Those call `addJobDocuments`, `confirmJob`, and `cancelJob`. Continue moves the job on to the file list. Cancel returns the drop zone.
 
 Suggested commit message: `feat(frontend): add upload and rejected-files flow`
 
@@ -492,7 +493,7 @@ Solves flow step 8: progress, report, and error states.
 ### 9E. Tests and Manual Verification
 
 - [ ] Playwright smoke tests: upload samples in mock mode, reach the report on the home page, refresh, and open a past summary.
-- [ ] Agentic verification of progress, report tabs, flags, and failure states, with screenshots for the README.
+- [ ] Agentic verification: an agent drives the running UI through each upload case, then through progress, report tabs, flags, and failure states, and reports what it sees.
 
 ### 9F. Learning Checkpoint
 
