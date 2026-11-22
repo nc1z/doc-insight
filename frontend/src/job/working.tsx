@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react';
 
 import type { JobView } from '@/api/client';
 import { Progress } from '@/components/ui/progress';
+import { useElapsed } from '@/job/elapsed';
 import { FileList } from '@/job/files';
 import { cn } from 'cn';
 
@@ -199,10 +200,12 @@ function Activity({
   active,
   finished,
   total,
+  elapsed,
 }: {
   active: number;
   finished: number;
   total: number;
+  elapsed: string;
 }) {
   const step = STEPS[active] ?? STEPS[0]!;
   const message = useCycle(step.messages.length, 2600);
@@ -218,11 +221,15 @@ function Activity({
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-4">
           <p className="text-sm font-medium">{step.title}</p>
-          {active < STEPS.length - 1 && total > 0 && (
-            <p className="shrink-0 text-xs text-muted-foreground tabular-nums">
-              {finished} of {total} {total === 1 ? 'file' : 'files'} done
-            </p>
-          )}
+          <p className="shrink-0 text-xs text-muted-foreground tabular-nums">
+            {active < STEPS.length - 1 && total > 0 && (
+              <>
+                {finished} of {total} {total === 1 ? 'file' : 'files'} done
+                <span aria-hidden> · </span>
+              </>
+            )}
+            <span aria-label={`Elapsed ${elapsed}`}>{elapsed}</span>
+          </p>
         </div>
         {/* Two lines reserved, so a longer message never pushes the page down. */}
         <div className="mt-0.5 min-h-10">
@@ -243,6 +250,7 @@ export function Working({ job }: { job: JobView }) {
   const active = Math.max(0, states.lastIndexOf('active'));
   const finished = job.documents.filter((document) => documentLevel(document.status) >= 3).length;
   const percent = overallPercent(job);
+  const elapsed = useElapsed(job.id);
   const finalising = active === STEPS.length - 1;
   return (
     <div className="space-y-6">
@@ -259,7 +267,12 @@ export function Working({ job }: { job: JobView }) {
           </span>
         </div>
         <div className="mt-6 border-t border-border pt-6">
-          <Activity active={active} finished={finished} total={job.documents.length} />
+          <Activity
+            active={active}
+            finished={finished}
+            total={job.documents.length}
+            elapsed={elapsed}
+          />
         </div>
       </div>
       <FileList job={job} showProgress={false} showSummaries />
