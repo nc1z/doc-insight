@@ -1,5 +1,7 @@
 # doc-insight
 
+<img width="800" height="494" alt="happy-path-demo" src="https://github.com/user-attachments/assets/52d9ce37-71a4-4c89-9155-72efa41c28ba" />
+
 ## Solution overview
 
 Doc Insight turns a batch of PDFs into one short report. Each file gets a summary, and one overview covers them all.
@@ -247,7 +249,19 @@ Stop it with `docker compose down`. Your data stays in Docker volumes. Add `-v` 
 
 ## Demo - Video / Screenshots
 
--
+<img width="1462" height="825" alt="image" src="https://github.com/user-attachments/assets/a191eb61-36c6-4359-9bff-74f5871a878b" /><img width="800" height="494" alt="happy-path-demo" src="https://github.com/user-attachments/assets/1b95c79e-903b-4724-bddb-33ca813172ad" />
+
+
+### 1. Happy Path - PDFs with text and images
+[ai-competitor-landscape.pdf](samples/flows/happy-path/ai-competitor-landscape.pdf) contains images which was successfully analysed and summarized, alongside a few other important documents.
+
+https://github.com/user-attachments/assets/52b37ad0-24f3-4660-8b0d-313ead6c0233
+
+### 2. Failure Path - Invalid PDFs, Adversarial Content
+
+Failures are handled even in the pipeline steps (even though the video doesn't show it), and allows the analyst to retry or continue. This ensures the analyst knows if certain context is left out and makes the decision.
+
+https://github.com/user-attachments/assets/3c740be7-8663-43f2-b323-94dad0e4cfa5
 
 ## Assumptions Made
 
