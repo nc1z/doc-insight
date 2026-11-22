@@ -27,6 +27,7 @@ def main() -> None:
             build_classifier(settings),
             build_file_storage(settings),
             delay_seconds=delay,
+            chunk_token_budget=settings.chunk_token_budget,
         )
     )
     try:

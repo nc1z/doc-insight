@@ -8,9 +8,11 @@ from app.domain.ports import (
     FileStorage,
     JobRepository,
     LLMProvider,
+    StoredChunk,
     StoredPage,
 )
 from app.domain.status import DocumentStatus
+from app.pipeline.chunk import chunk_pages
 from app.pipeline.models import DocumentSummary, ExtractedText, ExtractInput, PageText
 from app.pipeline.steps import (
     check_document,
@@ -21,7 +23,7 @@ from app.pipeline.steps import (
 
 
 class DocumentPipeline:
-    """Runs one stored step. Extract saves each page; later steps load those pages."""
+    """Runs one stored step. Extract saves each page and its chunks."""
 
     def __init__(
         self,
@@ -31,12 +33,14 @@ class DocumentPipeline:
         storage: FileStorage,
         *,
         delay_seconds: float,
+        chunk_token_budget: int,
     ) -> None:
         self._jobs = repository
         self._llm = llm
         self._classifier = classifier
         self._files = storage
         self._delay = delay_seconds
+        self._chunk_token_budget = chunk_token_budget
 
     async def run_step(self, document_id: UUID, status: DocumentStatus) -> None:
         progress = await self._jobs.document_progress(document_id)
@@ -85,6 +89,20 @@ class DocumentPipeline:
             [
                 StoredPage(page_number=page.page, text=page.text, needs_image=page.needs_image)
                 for page in extracted.pages
+            ],
+        )
+        await self._jobs.replace_chunks(
+            document_id,
+            [
+                StoredChunk(
+                    page_number=chunk.page,
+                    position=position,
+                    text=chunk.text,
+                    token_count=chunk.token_count,
+                )
+                for position, chunk in enumerate(
+                    chunk_pages(extracted.pages, self._chunk_token_budget)
+                )
             ],
         )
         return extracted

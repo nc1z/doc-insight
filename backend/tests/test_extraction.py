@@ -36,6 +36,18 @@ def test_extract_marks_a_scanned_page_for_image_handling() -> None:
     assert pages[0].needs_image is True
 
 
+def test_extract_reads_two_full_pages_and_marks_the_infographic() -> None:
+    pages = asyncio.run(_pages("coverage-memo.pdf"))
+
+    assert [page.page for page in pages] == [1, 2, 3]
+    assert len(pages[0].text) > 2500
+    assert len(pages[1].text) > 2500
+    assert pages[0].needs_image is False
+    assert pages[1].needs_image is False
+    assert "figure" in pages[2].text.lower()
+    assert pages[2].needs_image is True
+
+
 def test_extract_marks_only_the_chart_page() -> None:
     pages = asyncio.run(_pages("terminal-snapshot.pdf"))
 

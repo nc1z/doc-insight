@@ -7,6 +7,12 @@ class PageText(BaseModel):
     needs_image: bool = False
 
 
+class PageChunk(BaseModel):
+    page: int
+    text: str
+    token_count: int
+
+
 class ExtractInput(BaseModel):
     filename: str
     page_count: int | None

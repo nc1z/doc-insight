@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     llm_api_key: SecretStr = SecretStr("")
     llm_timeout_seconds: float = Field(default=60, gt=0)
     step_timeout_seconds: float = Field(default=60, gt=0)
+    chunk_token_budget: int = Field(default=2048, gt=0)
 
     classifier_provider: ClassifierProvider = "mock"
     classifier_model: str = Field(default="jev", min_length=1)

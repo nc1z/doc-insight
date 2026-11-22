@@ -79,6 +79,11 @@ class Document(Base):
         cascade="all, delete-orphan",
         order_by="Page.page_number",
     )
+    chunks: Mapped[list[Chunk]] = relationship(
+        back_populates="document",
+        cascade="all, delete-orphan",
+        order_by="Chunk.position",
+    )
 
 
 class Page(Base):
@@ -95,3 +100,20 @@ class Page(Base):
     needs_image: Mapped[bool] = mapped_column(server_default=false(), default=False)
 
     document: Mapped[Document] = relationship(back_populates="pages")
+
+
+class Chunk(Base):
+    __tablename__ = "chunks"
+    __table_args__ = (UniqueConstraint("document_id", "position"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid4)
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE"),
+        index=True,
+    )
+    page_number: Mapped[int]
+    position: Mapped[int]
+    text: Mapped[str] = mapped_column(Text)
+    token_count: Mapped[int]
+
+    document: Mapped[Document] = relationship(back_populates="chunks")

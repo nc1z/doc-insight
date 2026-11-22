@@ -12,7 +12,7 @@ Primary services/packages/frameworks:
 - **pydantic and pydantic-settings**: typed config from environment variables, and the schemas every LLM output is validated against.
 - **PyMuPDF4LLM**: per-page text. A page is marked for image handling in Phase 8 when `get_image_info()` shows an image on that page.
 - **GLM 4.7 or later through an OpenAI-compatible client**: document summaries and consolidation.
-- **Jev**: decision model for prompt-injection detection and document type.
+- **Decision-model classifier**: prompt-injection detection and document type. The provider comes from config.
 - **Bruno**: manual and CLI API testing for every backend endpoint.
 - **React + Vite + TypeScript, Tailwind CSS, shadcn/ui, TanStack Query, Playwright**: frontend, styling, components, polling, and end-to-end smoke tests.
 - **Docker Compose and GitHub Actions**: one-command local run, and CI.
@@ -147,7 +147,7 @@ Procrastinate is the queue, recorded on `2026-11-22`. `PostgresJobRepository.cre
 - [x] Add `samples/invalid/`: corrupt, encrypted, empty, and non-PDF renamed to `.pdf`.
 - [x] Add `samples/adversarial/` with a PDF containing injected instructions.
 
-`backend/evals/builder.py` renders `fixtures.json` when a test asks for a document. Text keeps a text layer, scanned pages and charts are images, hidden text is white 1pt type, and invisible text is Unicode tag characters. `python -m evals.builder` writes the files under `backend/evals/generated/`, which is gitignored. A14–A22 upload those files and check the status, the error code, and that no job is stored. `samples/` is a fictional Cedar Ridge Capital packet on Northline Semiconductor (NTLN), released as CC0. Short notes sit next to a few longer memos. The desk and the broker disagree on FY26 revenue, gross margin, and the price target, and the channel check disagrees with the desk on the order book. `samples/invalid/` is unchanged.
+`backend/evals/builder.py` renders `fixtures.json` when a test asks for a document. Text keeps a text layer, scanned pages and charts are images, hidden text is white 1pt type, and invisible text is Unicode tag characters. `python -m evals.builder` writes the files under `backend/evals/generated/`, which is gitignored. A14–A22 upload those files and check the status, the error code, and that no job is stored. `samples/` is a fictional Cedar Ridge Capital packet on Northline Semiconductor (NTLN), released as CC0. Short notes sit next to a few longer memos. `coverage-memo.pdf` is two pages of solid text and a third page of text with an infographic. The desk and the broker disagree on FY26 revenue, gross margin, and the price target, and the channel check disagrees with the desk on the order book. `samples/invalid/` is unchanged.
 
 ### 1G. Tests and Manual Verification
 
@@ -287,16 +287,18 @@ PyMuPDF4LLM reads each page of these born-digital memos in well under a second. 
 
 ### 4B. Chunking
 
-- [ ] Split page text into chunks within a configurable token budget, keeping page numbers on every chunk.
+- [x] Split page text into chunks within a configurable token budget, keeping page numbers on every chunk.
+
+Each page is split on paragraph and sentence boundaries into chunks of at most `CHUNK_TOKEN_BUDGET` tokens (default 2048, counted with cl100k). That budget holds a full page of text, so a page of solid words is one chunk. Every chunk stores that page number. A page denser than the budget splits inside the page. A page with no text, including the chart page, has none.
 
 ### 4C. Tests and Manual Verification
 
-- [ ] Tests against `samples/`: page counts, non-empty text, page numbers on chunks.
-- [ ] Bruno: upload a sample and confirm the job still reaches `succeeded`.
+- [x] Tests against `samples/`: page counts, non-empty text, page numbers on chunks.
+- [x] Bruno: upload a sample and confirm the job still reaches `succeeded`.
 
 ### 4D. Learning Checkpoint
 
-- [ ] Learning: explain the code changes in small chunks with file names, short snippets, layman explanations, and how page-tagged chunks make citations possible.
+- [x] Learning: explain the code changes in small chunks with file names, short snippets, layman explanations, and how page-tagged chunks make citations possible.
 
 Suggested commit message: `feat(backend): extract text per page and chunk documents`
 
@@ -311,12 +313,12 @@ Solves flow step 5: suspicious documents are flagged in the job response.
 - [ ] Detect injection phrases and fake role markers, invisible Unicode characters, long encoded blobs, and hidden text (white or tiny font).
 - [ ] Store each finding with its page and rule in a `guardrail_results` table.
 
-### 5B. Jev Classifier Adapter
+### 5B. Decision-model Classifier Adapter
 
-- [ ] Implement a `JevClassifier` behind the `Classifier` interface, returning the probability that a chunk contains instructions aimed at the model.
+- [ ] Implement a classifier adapter behind the `Classifier` interface, returning the probability that a chunk contains instructions aimed at the model.
 - [ ] Add a configurable flag threshold; keep the mock classifier as the default.
-- [ ] Use Jev for inferred document type (a choice from a fixed list).
-- [ ] Add `prompts.yaml` in `app/pipeline/` and a loader that validates every entry (ID, version, template, placeholders) at startup; the path comes from config. Keep the Jev questions and option descriptions in that file, not in code.
+- [ ] Use the configured decision model for inferred document type (a choice from a fixed list).
+- [ ] Add `prompts.yaml` in `app/pipeline/` and a loader that validates every entry (ID, version, template, placeholders) at startup; the path comes from config. Keep the classifier questions and option descriptions in that file, not in code.
 
 ### 5C. Flagging
 

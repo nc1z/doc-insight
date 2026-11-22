@@ -1,5 +1,6 @@
 import asyncio
 from io import BytesIO
+from pathlib import Path
 from uuid import UUID
 
 import pytest
@@ -92,6 +93,10 @@ def test_the_in_process_worker_reaches_succeeded(migrated_database_url: str) -> 
     asyncio.run(_worker_reaches_succeeded(migrated_database_url))
 
 
+def test_extract_stores_one_chunk_per_sample_page(migrated_database_url: str) -> None:
+    asyncio.run(_stores_sample_chunks(migrated_database_url))
+
+
 async def _worker_reaches_succeeded(database_url: str) -> None:
     engine = create_engine(database_url)
     queue = build_queue(database_url, maintenance_cron="0 0 1 1 *")
@@ -99,7 +104,14 @@ async def _worker_reaches_succeeded(database_url: str) -> None:
     bind_jobs(repository)
     storage = _Storage()
     bind_pipeline(
-        DocumentPipeline(repository, MockLLM(), MockClassifier(), storage, delay_seconds=0)
+        DocumentPipeline(
+            repository,
+            MockLLM(),
+            MockClassifier(),
+            storage,
+            delay_seconds=0,
+            chunk_token_budget=2048,
+        )
     )
     try:
         await _clear(engine)
@@ -133,7 +145,14 @@ async def _stores_results(database_url: str) -> None:
     repository = PostgresJobRepository(create_session_factory(engine), build_queue(database_url))
     storage = _Storage()
     bind_pipeline(
-        DocumentPipeline(repository, MockLLM(), MockClassifier(), storage, delay_seconds=0)
+        DocumentPipeline(
+            repository,
+            MockLLM(),
+            MockClassifier(),
+            storage,
+            delay_seconds=0,
+            chunk_token_budget=2048,
+        )
     )
     try:
         with _client(database_url, storage) as client:
@@ -159,6 +178,42 @@ async def _stores_results(database_url: str) -> None:
             (1, "", False)
         ]
         assert len(await repository.list_pages(document_id)) == 1
+        assert await repository.list_chunks(document_id) == []
+    finally:
+        bind_pipeline(None)
+        await _clear(engine)
+        await engine.dispose()
+
+
+async def _stores_sample_chunks(database_url: str) -> None:
+    engine = create_engine(database_url)
+    repository = PostgresJobRepository(create_session_factory(engine), build_queue(database_url))
+    storage = _Storage()
+    bind_pipeline(
+        DocumentPipeline(
+            repository,
+            MockLLM(),
+            MockClassifier(),
+            storage,
+            delay_seconds=0,
+            chunk_token_budget=2048,
+        )
+    )
+    try:
+        sample = Path(__file__).resolve().parents[2] / "samples" / "company-primer.pdf"
+        with _client(database_url, storage) as client:
+            created = client.post(
+                "/jobs",
+                files=[("files", ("company-primer.pdf", sample.read_bytes(), "application/pdf"))],
+            )
+            document_id = UUID(
+                client.get(f"/jobs/{created.json()['id']}").json()["documents"][0]["id"]
+            )
+            await run_document(repository, document_id)
+            chunks = await repository.list_chunks(document_id)
+        assert [(chunk.position, chunk.page_number) for chunk in chunks] == [(0, 1), (1, 2), (2, 3)]
+        assert all(chunk.text and chunk.token_count <= 2048 for chunk in chunks)
+        assert "Northline" in chunks[0].text
     finally:
         bind_pipeline(None)
         await _clear(engine)

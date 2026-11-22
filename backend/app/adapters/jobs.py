@@ -12,8 +12,8 @@ from sqlalchemy.orm import selectinload
 from app.adapters.queue import CONSOLIDATE_JOB, PROCESS_DOCUMENT
 from app.core.errors import DomainError
 from app.domain.job_state import transition
-from app.domain.models import Document, Job, Page
-from app.domain.ports import DocumentProgress, NewDocument, NewRejection, StoredPage
+from app.domain.models import Chunk, Document, Job, Page
+from app.domain.ports import DocumentProgress, NewDocument, NewRejection, StoredChunk, StoredPage
 from app.domain.status import DocumentStatus, JobStatus
 
 
@@ -277,6 +277,39 @@ class PostgresJobRepository:
             )
             return [
                 StoredPage(page_number=row.page_number, text=row.text, needs_image=row.needs_image)
+                for row in rows
+            ]
+
+    async def replace_chunks(self, document_id: UUID, chunks: Sequence[StoredChunk]) -> None:
+        async with self._sessions() as session, session.begin():
+            document = await session.get(Document, document_id)
+            if document is None:
+                return
+            await session.execute(delete(Chunk).where(Chunk.document_id == document_id))
+            await session.flush()
+            session.add_all(
+                Chunk(
+                    document_id=document_id,
+                    page_number=chunk.page_number,
+                    position=chunk.position,
+                    text=chunk.text,
+                    token_count=chunk.token_count,
+                )
+                for chunk in chunks
+            )
+
+    async def list_chunks(self, document_id: UUID) -> Sequence[StoredChunk]:
+        async with self._sessions() as session:
+            rows = await session.scalars(
+                select(Chunk).where(Chunk.document_id == document_id).order_by(Chunk.position)
+            )
+            return [
+                StoredChunk(
+                    page_number=row.page_number,
+                    position=row.position,
+                    text=row.text,
+                    token_count=row.token_count,
+                )
                 for row in rows
             ]
 

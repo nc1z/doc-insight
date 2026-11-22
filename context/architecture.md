@@ -408,6 +408,7 @@ Each step picks its model through configuration (strategy pattern). The pipeline
 ### Stored in Postgres
 
 - Extracted text per page in `pages`, kept for citation checks and re-runs. `needs_image` is set when `page.get_image_info()` lists an image displayed on the page. A short page of text stays unmarked, and so does a blank page. Phase 8 renders a marked page for Tesseract or a vision model.
+- Chunks of that page text in `chunks`. Each chunk carries its page number and does not cross a page. `CHUNK_TOKEN_BUDGET` defaults to 2048 cl100k tokens, enough for a full page of text. A denser page splits inside that page.
 - Guardrail results and flags per document.
 - Document summaries and the consolidated report, as validated JSON.
 - Telemetry per LLM call: model, prompt version, tokens, and latency.
@@ -418,7 +419,6 @@ Each step picks its model through configuration (strategy pattern). The pipeline
 - **Flagged documents**: process them with hardened prompts and a warning, or pause the job for the analyst to decide, as with rejected files.
 - **GLM version**: GLM 4.7 with JSON mode and validation, or a newer version with schema-constrained output.
 - **Injection threshold**: the Jev probability above which a chunk is flagged, tuned on the adversarial eval set.
-- **Chunk size and token budget** per model.
 
 ## UI/UX
 

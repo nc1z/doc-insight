@@ -22,6 +22,22 @@ Findings from technical literature and industry guidance that shape the doc-insi
 
 **For us**: keep map-reduce, and pass source excerpts alongside chunk summaries in the combine step.
 
+### Chunk size
+
+- Retrieval products publish a chunk size because they embed each chunk and search it:
+  - [LlamaIndex](https://developers.llamaindex.ai/python/framework/optimizing/basic_strategies/basic_strategies/) defaults to 1024 tokens, with 20 tokens of overlap. [Its own eval](https://www.llamaindex.ai/blog/evaluating-the-ideal-chunk-size-for-a-rag-system-using-llamaindex-6207e5d3fec5) peaked on faithfulness and relevancy at 1024.
+  - [OpenAI file search](https://developers.openai.com/api/docs/guides/retrieval) defaults to 800 tokens, with 400 of overlap. The allowed range is 100–4096.
+  - [AWS Bedrock Knowledge Bases](https://aws.amazon.com/blogs/machine-learning/contextual-retrieval-in-anthropic-using-amazon-bedrock-knowledge-bases/) defaults to 300 tokens, with 20% overlap.
+  - [Anthropic's contextual retrieval eval](https://www.anthropic.com/research/contextual-retrieval) used 800-token chunks.
+  - The usual range on top of those defaults is 256–512 tokens for a fact lookup and 512–1024 when the question needs a whole passage.
+- [NVIDIA (June 2025)](https://developer.nvidia.com/blog/finding-the-best-chunking-strategy-for-accurate-ai-responses/) scored final answers, not just retrieval, across 128, 256, 512, 1024, and 2048 token chunks, plus one chunk per page and one chunk per section.
+  - A chunk per page had the highest average accuracy (0.648) and the smallest spread across datasets (0.107).
+  - Fixed token windows peaked in the middle. Earnings questions peaked at 512. FinanceBench and other analytical sets peaked at 1024. A 2048-token window scored lower than 1024 on those sets (FinanceBench 0.506 against 0.579).
+  - A page number stays a stable citation. A token-chunk index moves when the budget changes.
+- [NVIDIA's document summariser](https://docs.nvidia.com/rag/latest/summarization.html) uses a different budget: 9000 tokens, with 400–500 of overlap. A larger chunk gives a better summary when it fits the model, which matches map-reduce, where the chunk is summarised rather than embedded.
+
+**For us**: `CHUNK_TOKEN_BUDGET` defaults to 2048 cl100k tokens, and a chunk stays on one page. A letter page of solid text is about 700 tokens at a normal size and about 1600 set tight, so that default keeps the page as one chunk. That is the page-level strategy that scored best, and the citation stays on the page. The 512–1024 figures are for embedding a passage and searching it. The 2048 figure that scored worse is a fixed window that runs through the document, not a cap on a single page. Overlap stays at 0, because a repeated passage would be summarised twice. The budget stays in config so an eval can move it.
+
 ### Multi-document contradictions
 
 - A [2026 survey of multi-document summarisation](https://link.springer.com/article/10.1007/s10462-026-11580-z) lists handling conflicting information as a core challenge: remove duplication while keeping divergent viewpoints.

@@ -47,6 +47,14 @@ class StoredPage:
 
 
 @dataclass(frozen=True)
+class StoredChunk:
+    page_number: int
+    position: int
+    text: str
+    token_count: int
+
+
+@dataclass(frozen=True)
 class Classification:
     label: str
     score: float
@@ -98,6 +106,10 @@ class JobRepository(Protocol):
     async def replace_pages(self, document_id: UUID, pages: Sequence[StoredPage]) -> None: ...
 
     async def list_pages(self, document_id: UUID) -> Sequence[StoredPage]: ...
+
+    async def replace_chunks(self, document_id: UUID, chunks: Sequence[StoredChunk]) -> None: ...
+
+    async def list_chunks(self, document_id: UUID) -> Sequence[StoredChunk]: ...
 
     async def consolidate(
         self,

@@ -27,6 +27,7 @@ _ENV_KEYS = (
     "LLM_API_KEY",
     "LLM_TIMEOUT_SECONDS",
     "STEP_TIMEOUT_SECONDS",
+    "CHUNK_TOKEN_BUDGET",
     "CLASSIFIER_PROVIDER",
     "CLASSIFIER_MODEL",
     "CLASSIFIER_API_KEY",
@@ -54,6 +55,7 @@ def test_mock_defaults_need_no_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.maintenance_cron == "*/15 * * * *"
     assert settings.mock_step_delay_seconds == 1
     assert settings.step_timeout_seconds == 60
+    assert settings.chunk_token_budget == 2048
     assert settings.queue_provider == "procrastinate"
     assert settings.storage_provider == "s3"
     assert settings.s3_endpoint == "http://localhost:9000"

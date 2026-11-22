@@ -113,6 +113,16 @@ def test_demo_samples_disagree_and_cover_each_shape() -> None:
     assert len(channel.pages) == 3
     assert "cut the Q3 order by 15 percent" in channel_text
 
+    coverage = PdfReader(_ROOT / "samples" / "coverage-memo.pdf")
+    assert len(coverage.pages) == 3
+    assert len(coverage.pages[0].extract_text() or "") > 2500
+    assert len(coverage.pages[1].extract_text() or "") > 2500
+    assert "Coverage memo" in (coverage.pages[0].extract_text() or "")
+    assert "figure" in (coverage.pages[2].extract_text() or "").lower()
+    assert _image_count(coverage.pages[0]) == 0
+    assert _image_count(coverage.pages[1]) == 0
+    assert _image_count(coverage.pages[2]) == 1
+
     snapshot = PdfReader(_ROOT / "samples" / "terminal-snapshot.pdf")
     assert "Short interest" in (snapshot.pages[0].extract_text() or "")
     assert "316" not in (snapshot.pages[1].extract_text() or "")
@@ -130,6 +140,20 @@ def test_demo_samples_disagree_and_cover_each_shape() -> None:
     empty = _upload("invalid/empty.pdf", "application/pdf")
     assert empty.accepted[0].page_count == 1
     assert empty.rejected == ()
+
+
+def _image_count(page) -> int:
+    resources = page.get("/Resources")
+    if resources is None:
+        return 0
+    xobjects = resources.get_object().get("/XObject")
+    if xobjects is None:
+        return 0
+    return sum(
+        1
+        for item in xobjects.get_object().values()
+        if item.get_object().get("/Subtype") == "/Image"
+    )
 
 
 def _sample_text(name: str) -> str:

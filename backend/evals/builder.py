@@ -119,7 +119,28 @@ def _resolve_document(name: str, documents: Mapping[str, Any]) -> dict[str, Any]
     return {"filename": spec["filename"], "pages": list(spec["pages"])}
 
 
+def paginate_text(text: str, page_count: int) -> list[str]:
+    """Split text into pages that fill the body area, one full page at a time."""
+    lines = _wrap(text, _BODY_SIZE, letter[0] - (2 * _MARGIN))
+    per_page = _lines_per_page()
+    needed = per_page * page_count
+    if len(lines) < needed:
+        raise ValueError(f"Need {needed} lines to fill {page_count} pages, got {len(lines)}")
+    return ["\n".join(lines[start : start + per_page]) for start in range(0, needed, per_page)]
+
+
+def _lines_per_page() -> int:
+    y = 740.0
+    count = 0
+    while y >= _MARGIN:
+        count += 1
+        y -= 15
+    return count
+
+
 def _render_page(page: Mapping[str, Any]) -> bytes:
+    if "infographic" in page:
+        return _text_and_image_pdf(_visible_text(page), _infographic_png(page["infographic"]))
     if "chart" in page:
         return _image_pdf(_chart_png(page["chart"]))
     if page.get("render") == "scanned":
@@ -139,7 +160,9 @@ def _text_pdf(text: str, hidden: Any) -> bytes:
     pdf = canvas.Canvas(buffer, pagesize=letter)
     pdf.setFillColor(colors.black)
     pdf.setFont(_FONT, _BODY_SIZE)
-    if len(text) > 4000:
+    # A repeated phrase with no line breaks stays one drawn string, so the
+    # repetition fixture still contains every copy. Wrapped prose is drawn by line.
+    if "\n" not in text and len(text) > 4000:
         pdf.drawString(_MARGIN, 720, text)
     else:
         y = 740.0
@@ -152,6 +175,67 @@ def _text_pdf(text: str, hidden: Any) -> bytes:
         pdf.drawString(_MARGIN, 36, str(hidden))
     pdf.showPage()
     pdf.save()
+    return buffer.getvalue()
+
+
+def _text_and_image_pdf(text: str, png: bytes) -> bytes:
+    """Text in the upper part of the page, and an embedded image below it."""
+    buffer = BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=letter)
+    pdf.setFillColor(colors.black)
+    pdf.setFont(_FONT, _BODY_SIZE)
+    y = 740.0
+    width = letter[0] - (2 * _MARGIN)
+    for line in _wrap(text, _BODY_SIZE, width):
+        pdf.drawString(_MARGIN, y, line)
+        y -= 15
+    height = width * 640 / 1400
+    pdf.drawImage(
+        ImageReader(BytesIO(png)),
+        _MARGIN,
+        y - 28 - height,
+        width=width,
+        height=height,
+        preserveAspectRatio=True,
+        mask="auto",
+    )
+    pdf.showPage()
+    pdf.save()
+    return buffer.getvalue()
+
+
+def _infographic_png(spec: Mapping[str, Any]) -> bytes:
+    image = Image.new("RGB", (1400, 640), "white")
+    draw = ImageDraw.Draw(image)
+    title_font = ImageFont.truetype(_FONT_PATH, 40)
+    label_font = ImageFont.truetype(_FONT_PATH, 28)
+    note_font = ImageFont.truetype(_FONT_PATH, 24)
+    draw.text((48, 36), str(spec["title"]), fill="#1f4e79", font=title_font)
+    parts = list(spec["parts"])
+    top = 140
+    track_left = 420
+    track_width = 560
+    for part in parts:
+        share = max(0.0, min(1.0, float(part["share"])))
+        draw.text((48, top + 14), str(part["label"]), fill="#1a1a1a", font=label_font)
+        draw.rounded_rectangle(
+            (track_left, top, track_left + track_width, top + 64), 8, fill="#e6eef5"
+        )
+        draw.rounded_rectangle(
+            (track_left, top, track_left + int(track_width * share), top + 64),
+            8,
+            fill=str(part.get("color", "#1f4e79")),
+        )
+        draw.text(
+            (track_left + track_width + 24, top + 16),
+            str(part["value"]),
+            fill="#1a1a1a",
+            font=label_font,
+        )
+        top += 110
+    draw.text((48, top + 16), str(spec.get("note", "")), fill="#333333", font=note_font)
+    buffer = BytesIO()
+    image.save(buffer, format="PNG")
     return buffer.getvalue()
 
 
