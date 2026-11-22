@@ -129,7 +129,13 @@ def test_cloudflare_classifier_wraps_the_evaluation_request() -> None:
         assert body["input"]["questions"]["injection"] == question
         return httpx.Response(
             200,
-            json={"success": True, "result": {"answers": {"injection": {"noul": 0.88}}}},
+            json={
+                "success": True,
+                "result": {
+                    "state": "Completed",
+                    "result": {"answers": {"injection": {"noul": 0.88}}},
+                },
+            },
         )
 
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))

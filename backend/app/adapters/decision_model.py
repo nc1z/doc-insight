@@ -105,6 +105,10 @@ def _answers(body: object) -> dict[str, Any]:
         raise ValueError("Classifier request was rejected")
     result = body.get("result")
     source = result if isinstance(result, dict) else body
+    # /ai/run wraps the model output again: result.state plus result.result.answers.
+    inner = source.get("result")
+    if isinstance(inner, dict) and isinstance(inner.get("answers"), dict):
+        source = inner
     answers = source.get("answers")
     if not isinstance(answers, dict):
         raise ValueError("Classifier response has no answers")  # noqa: TRY004
