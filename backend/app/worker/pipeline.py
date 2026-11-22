@@ -1,3 +1,4 @@
+import asyncio
 from typing import Any
 from uuid import UUID
 
@@ -9,10 +10,12 @@ from app.domain.ports import (
     JobRepository,
     LLMProvider,
     StoredChunk,
+    StoredGuardrail,
     StoredPage,
 )
 from app.domain.status import DocumentStatus
 from app.pipeline.chunk import chunk_pages
+from app.pipeline.guardrails import scan_pdf
 from app.pipeline.models import DocumentSummary, ExtractedText, ExtractInput, PageText
 from app.pipeline.steps import (
     check_document,
@@ -55,6 +58,20 @@ class DocumentPipeline:
             delay_seconds=self._delay if status is DocumentStatus.CHECKING else 0,
         )
         if status is DocumentStatus.CHECKING:
+            if progress.storage_key is not None:
+                data = await self._files.get(progress.storage_key)
+                findings = await asyncio.to_thread(scan_pdf, data)
+                await self._jobs.replace_guardrails(
+                    document_id,
+                    [
+                        StoredGuardrail(
+                            page_number=finding.page_number,
+                            rule=finding.rule,
+                            excerpt=finding.excerpt,
+                        )
+                        for finding in findings
+                    ],
+                )
             await self._jobs.save_flag(document_id, checked.flagged)
             return
         summary = await summarise_document(

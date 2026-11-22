@@ -22,6 +22,7 @@ from app.pipeline.steps import check_document, extract_text
 from app.worker.pipeline import DocumentPipeline
 from app.worker.processing import bind_pipeline, run_consolidation, run_document
 from app.worker.tasks import bind_jobs
+from evals.builder import FixtureLimits, build_fixture
 
 
 def test_extract_waits_for_the_configured_delay(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -91,6 +92,10 @@ def test_mock_pipeline_stores_the_summary_and_report(migrated_database_url: str)
 
 def test_the_in_process_worker_reaches_succeeded(migrated_database_url: str) -> None:
     asyncio.run(_worker_reaches_succeeded(migrated_database_url))
+
+
+def test_check_stores_a_hidden_text_finding(migrated_database_url: str) -> None:
+    asyncio.run(_stores_hidden_text(migrated_database_url))
 
 
 def test_extract_stores_one_chunk_per_sample_page(migrated_database_url: str) -> None:
@@ -179,6 +184,45 @@ async def _stores_results(database_url: str) -> None:
         ]
         assert len(await repository.list_pages(document_id)) == 1
         assert await repository.list_chunks(document_id) == []
+    finally:
+        bind_pipeline(None)
+        await _clear(engine)
+        await engine.dispose()
+
+
+async def _stores_hidden_text(database_url: str) -> None:
+    engine = create_engine(database_url)
+    repository = PostgresJobRepository(create_session_factory(engine), build_queue(database_url))
+    storage = _Storage()
+    bind_pipeline(
+        DocumentPipeline(
+            repository,
+            MockLLM(),
+            MockClassifier(),
+            storage,
+            delay_seconds=0,
+            chunk_token_budget=2048,
+        )
+    )
+    try:
+        sample = build_fixture("feedback-hidden-text", FixtureLimits(20 * 1024 * 1024, 100, 10))
+        with _client(database_url, storage) as client:
+            created = client.post(
+                "/jobs",
+                files=[("files", (sample.filename, sample.data, "application/pdf"))],
+            )
+            body = client.get(f"/jobs/{created.json()['id']}").json()
+            document_id = UUID(body["documents"][0]["id"])
+            await run_document(repository, document_id)
+            findings = await repository.list_guardrails(document_id)
+            stored = client.get(f"/jobs/{created.json()['id']}").json()
+        assert any(
+            finding.page_number == 2
+            and finding.rule == "hidden_text"
+            and "cancelled" in finding.excerpt
+            for finding in findings
+        )
+        assert stored["documents"][0]["flagged"] is False
     finally:
         bind_pipeline(None)
         await _clear(engine)

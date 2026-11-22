@@ -84,6 +84,11 @@ class Document(Base):
         cascade="all, delete-orphan",
         order_by="Chunk.position",
     )
+    guardrails: Mapped[list[GuardrailResult]] = relationship(
+        back_populates="document",
+        cascade="all, delete-orphan",
+        order_by="GuardrailResult.page_number",
+    )
 
 
 class Page(Base):
@@ -117,3 +122,18 @@ class Chunk(Base):
     token_count: Mapped[int]
 
     document: Mapped[Document] = relationship(back_populates="chunks")
+
+
+class GuardrailResult(Base):
+    __tablename__ = "guardrail_results"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid4)
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE"),
+        index=True,
+    )
+    page_number: Mapped[int]
+    rule: Mapped[str] = mapped_column(String(64))
+    excerpt: Mapped[str] = mapped_column(Text)
+
+    document: Mapped[Document] = relationship(back_populates="guardrails")

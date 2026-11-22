@@ -12,8 +12,15 @@ from sqlalchemy.orm import selectinload
 from app.adapters.queue import CONSOLIDATE_JOB, PROCESS_DOCUMENT
 from app.core.errors import DomainError
 from app.domain.job_state import transition
-from app.domain.models import Chunk, Document, Job, Page
-from app.domain.ports import DocumentProgress, NewDocument, NewRejection, StoredChunk, StoredPage
+from app.domain.models import Chunk, Document, GuardrailResult, Job, Page
+from app.domain.ports import (
+    DocumentProgress,
+    NewDocument,
+    NewRejection,
+    StoredChunk,
+    StoredGuardrail,
+    StoredPage,
+)
 from app.domain.status import DocumentStatus, JobStatus
 
 
@@ -297,6 +304,41 @@ class PostgresJobRepository:
                 )
                 for chunk in chunks
             )
+
+    async def replace_guardrails(
+        self,
+        document_id: UUID,
+        findings: Sequence[StoredGuardrail],
+    ) -> None:
+        async with self._sessions() as session, session.begin():
+            document = await session.get(Document, document_id)
+            if document is None:
+                return
+            await session.execute(
+                delete(GuardrailResult).where(GuardrailResult.document_id == document_id)
+            )
+            await session.flush()
+            session.add_all(
+                GuardrailResult(
+                    document_id=document_id,
+                    page_number=finding.page_number,
+                    rule=finding.rule,
+                    excerpt=finding.excerpt,
+                )
+                for finding in findings
+            )
+
+    async def list_guardrails(self, document_id: UUID) -> Sequence[StoredGuardrail]:
+        async with self._sessions() as session:
+            rows = await session.scalars(
+                select(GuardrailResult)
+                .where(GuardrailResult.document_id == document_id)
+                .order_by(GuardrailResult.page_number, GuardrailResult.rule)
+            )
+            return [
+                StoredGuardrail(page_number=row.page_number, rule=row.rule, excerpt=row.excerpt)
+                for row in rows
+            ]
 
     async def list_chunks(self, document_id: UUID) -> Sequence[StoredChunk]:
         async with self._sessions() as session:

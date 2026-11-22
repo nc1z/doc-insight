@@ -310,8 +310,10 @@ Solves flow step 5: suspicious documents are flagged in the job response.
 
 ### 5A. Programmatic Checks
 
-- [ ] Detect injection phrases and fake role markers, invisible Unicode characters, long encoded blobs, and hidden text (white or tiny font).
-- [ ] Store each finding with its page and rule in a `guardrail_results` table.
+- [x] Detect injection phrases and fake role markers, invisible Unicode characters, long encoded blobs, and hidden text (white or tiny font).
+- [x] Store each finding with its page and rule in a `guardrail_results` table.
+
+The check reads the PDF. An injection phrase, a fake role marker (`SYSTEM:`, `</document>`), invisible characters, a base64 run of 64 characters or more, and text that is white or 2pt or smaller are each stored with the page and a short excerpt. A phrase or a role marker is stored and does not, by itself, mark the document flagged. A speaker label such as "Assistant Director" is not a role marker.
 
 ### 5B. Decision-model Classifier Adapter
 

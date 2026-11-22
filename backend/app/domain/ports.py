@@ -55,6 +55,13 @@ class StoredChunk:
 
 
 @dataclass(frozen=True)
+class StoredGuardrail:
+    page_number: int
+    rule: str
+    excerpt: str
+
+
+@dataclass(frozen=True)
 class Classification:
     label: str
     score: float
@@ -110,6 +117,14 @@ class JobRepository(Protocol):
     async def replace_chunks(self, document_id: UUID, chunks: Sequence[StoredChunk]) -> None: ...
 
     async def list_chunks(self, document_id: UUID) -> Sequence[StoredChunk]: ...
+
+    async def replace_guardrails(
+        self,
+        document_id: UUID,
+        findings: Sequence[StoredGuardrail],
+    ) -> None: ...
+
+    async def list_guardrails(self, document_id: UUID) -> Sequence[StoredGuardrail]: ...
 
     async def consolidate(
         self,

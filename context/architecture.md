@@ -409,7 +409,7 @@ Each step picks its model through configuration (strategy pattern). The pipeline
 
 - Extracted text per page in `pages`, kept for citation checks and re-runs. `needs_image` is set when `page.get_image_info()` lists an image displayed on the page. A short page of text stays unmarked, and so does a blank page. Phase 8 renders a marked page for Tesseract or a vision model.
 - Chunks of that page text in `chunks`. Each chunk carries its page number and does not cross a page. `CHUNK_TOKEN_BUDGET` defaults to 2048 cl100k tokens, enough for a full page of text. A denser page splits inside that page.
-- Guardrail results and flags per document.
+- Programmatic guardrail findings in `guardrail_results`. Each row is the page, the rule, and a short excerpt. The rules are an injection phrase, a fake role marker, invisible characters, a long encoded blob, and text drawn in white or at a tiny size. A phrase or a role marker is recorded and does not, by itself, mark the document flagged.
 - Document summaries and the consolidated report, as validated JSON.
 - Telemetry per LLM call: model, prompt version, tokens, and latency.
 - Status of each step, so a retried job resumes from the last completed step.
