@@ -33,6 +33,7 @@ _ENV_KEYS = (
     "CLASSIFIER_MODEL",
     "CLASSIFIER_BASE_URL",
     "CLOUDFLARE_ACCOUNT_ID",
+    "CLOUDFLARE_AI_GATEWAY_ID",
     "CLASSIFIER_API_KEY",
     "CLASSIFIER_TIMEOUT_SECONDS",
     "CLASSIFIER_FLAG_THRESHOLD",
@@ -72,6 +73,7 @@ def test_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.classifier_model == "typesafe/jev"
     assert settings.classifier_base_url == "https://api.cloudflare.com/client/v4"
     assert settings.cloudflare_account_id == "acct"
+    assert settings.cloudflare_ai_gateway_id == "default"
     assert settings.system_prompts_path.name == "prompts.yaml"
     assert settings.queue_provider == "procrastinate"
     assert settings.storage_provider == "s3"

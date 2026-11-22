@@ -1,12 +1,15 @@
 import asyncio
 
+import httpx2
 import pytest
 from pydantic import BaseModel
-from pydantic_ai.exceptions import UnexpectedModelBehavior
 from pydantic_ai.messages import ModelResponse, TextPart
 from pydantic_ai.models.function import AgentInfo, FunctionModel
+from pydantic_ai.models.openai import OpenAIChatModel
+from pydantic_ai.providers.openai_compatible import OpenAICompatibleProvider
 
 from app.adapters.summary_client import GatewaySummaryClient
+from app.domain.failures import StepFailure
 from app.domain.ports import LLMRequest
 
 _REQUEST = LLMRequest(
@@ -57,7 +60,10 @@ def test_a_summary_that_does_not_match_is_asked_again(caplog: pytest.LogCaptureF
 
 
 def test_retries_stop_at_the_configured_limit() -> None:
+    calls: list[int] = []
+
     def respond(_messages: list[object], _info: AgentInfo) -> ModelResponse:
+        calls.append(1)
         return ModelResponse(parts=[TextPart(content="not json")])
 
     client = GatewaySummaryClient(
@@ -69,5 +75,56 @@ def test_retries_stop_at_the_configured_limit() -> None:
         chat=FunctionModel(respond),
     )
 
-    with pytest.raises(UnexpectedModelBehavior):
+    with pytest.raises(StepFailure) as caught:
         asyncio.run(client.complete(_REQUEST, _Note))
+
+    assert caught.value.code == "step_failed"
+    assert caught.value.permanent is True
+    assert len(calls) == 2
+
+
+def test_summary_request_names_the_ai_gateway() -> None:
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        assert request.headers["cf-aig-gateway-id"] == "credits"
+        return httpx2.Response(
+            200,
+            json={
+                "id": "chatcmpl-test",
+                "object": "chat.completion",
+                "created": 0,
+                "model": "@cf/zai-org/glm-5.3",
+                "choices": [
+                    {
+                        "index": 0,
+                        "message": {"role": "assistant", "content": '{"title": "Harbour Line"}'},
+                        "finish_reason": "stop",
+                    }
+                ],
+                "usage": {"prompt_tokens": 3, "completion_tokens": 2, "total_tokens": 5},
+            },
+        )
+
+    http = httpx2.AsyncClient(transport=httpx2.MockTransport(handler))
+    chat = OpenAIChatModel(
+        "@cf/zai-org/glm-5.3",
+        provider=OpenAICompatibleProvider(
+            "cloudflare",
+            base_url="https://api.cloudflare.com/client/v4/accounts/acct/ai/v1",
+            api_key="test-key",
+            http_client=http,
+        ),
+    )
+    client = GatewaySummaryClient(
+        model="@cf/zai-org/glm-5.3",
+        api_key="test-key",
+        base_url="https://api.cloudflare.com/client/v4/accounts/acct/ai/v1",
+        timeout=5,
+        output_retries=0,
+        chat=chat,
+        gateway_id="credits",
+    )
+
+    summary = asyncio.run(client.complete(_REQUEST, _Note))
+
+    assert summary.output.title == "Harbour Line"
+    asyncio.run(http.aclose())

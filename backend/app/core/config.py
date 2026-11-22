@@ -57,6 +57,7 @@ class Settings(BaseSettings):
         min_length=1,
     )
     cloudflare_account_id: str = ""
+    cloudflare_ai_gateway_id: str = Field(default="default", min_length=1)
     classifier_api_key: SecretStr = SecretStr("")
     classifier_timeout_seconds: float = Field(default=30, gt=0)
     classifier_flag_threshold: float = Field(default=0.7, ge=0, le=1)

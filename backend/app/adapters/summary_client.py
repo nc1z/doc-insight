@@ -3,12 +3,14 @@ import time
 from typing import TypeVar
 
 from pydantic import BaseModel
-from pydantic_ai import Agent, PromptedOutput
+from pydantic_ai import Agent, ModelSettings, PromptedOutput
+from pydantic_ai.exceptions import UnexpectedModelBehavior
 from pydantic_ai.models import Model
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai_compatible import OpenAICompatibleProvider
 
 from app.core.config import Settings
+from app.domain.failures import StepFailure
 from app.domain.ports import LLMCall, LLMRequest, LLMResult
 from app.pipeline.prompts import llm_call_key
 
@@ -27,12 +29,14 @@ class GatewaySummaryClient:
         timeout: float,
         output_retries: int,
         chat: Model | None = None,
+        gateway_id: str = "",
     ) -> None:
         os.environ.setdefault("PYDANTIC_AI_NO_BANNER", "1")
         self._model = model
         self._base_url = base_url
         self._timeout = timeout
         self._output_retries = output_retries
+        self._gateway_id = gateway_id
         self._chat = chat or OpenAIChatModel(
             model,
             provider=OpenAICompatibleProvider("cloudflare", base_url=base_url, api_key=api_key),
@@ -48,6 +52,7 @@ class GatewaySummaryClient:
             base_url=f"{root}/accounts/{account}/ai/v1",
             timeout=settings.llm_timeout_seconds,
             output_retries=settings.llm_output_retries,
+            gateway_id=settings.cloudflare_ai_gateway_id,
         )
 
     async def complete(
@@ -55,25 +60,31 @@ class GatewaySummaryClient:
     ) -> LLMResult[SummaryT]:
         key = llm_call_key(self._model, request.prompt_id, request.prompt_version)
         started = time.perf_counter()
+        model_settings: ModelSettings = {
+            "timeout": self._timeout,
+            "request_timeout": self._timeout,
+            "max_retries": 0,
+        }
+        if self._gateway_id:
+            model_settings["extra_headers"] = {"cf-aig-gateway-id": self._gateway_id}
         agent: Agent[None, SummaryT] = Agent(
             self._chat,
             output_type=PromptedOutput(output_type),
             retries={"output": self._output_retries, "tools": 0},
-            model_settings={
-                "timeout": self._timeout,
-                "request_timeout": self._timeout,
-                "max_retries": 0,
-            },
+            model_settings=model_settings,
         )
-        result = await agent.run(
-            request.user,
-            instructions=request.system,
-            metadata={
-                "prompt_id": request.prompt_id,
-                "prompt_version": request.prompt_version,
-                "cache_key": key,
-            },
-        )
+        try:
+            result = await agent.run(
+                request.user,
+                instructions=request.system,
+                metadata={
+                    "prompt_id": request.prompt_id,
+                    "prompt_version": request.prompt_version,
+                    "cache_key": key,
+                },
+            )
+        except UnexpectedModelBehavior as exc:
+            raise StepFailure("step_failed", permanent=True) from exc
         usage = result.usage
         return LLMResult(
             output=result.output,

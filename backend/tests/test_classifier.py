@@ -55,6 +55,7 @@ def test_hosted_classifier_reads_the_prompt_file() -> None:
 
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.headers["authorization"] == "Bearer test-key"
+        assert "cf-aig-gateway-id" not in request.headers
         assert request.url.path == "/v1/systemone"
         body = json.loads(request.content)
         assert body["model"] == settings.classifier_model
@@ -118,9 +119,11 @@ def test_cloudflare_classifier_wraps_the_evaluation_request() -> None:
 
     assert isinstance(build_classifier(settings), CloudflareClassifier)
     assert built._url == "https://api.cloudflare.com/client/v4/accounts/acct/ai/run"
+    assert built._headers == {"cf-aig-gateway-id": "default"}
 
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.headers["authorization"] == "Bearer test-key"
+        assert request.headers["cf-aig-gateway-id"] == "default"
         assert request.url.path == "/client/v4/accounts/acct/ai/run"
         body = json.loads(request.content)
         assert body["model"] == "typesafe/jev"
@@ -148,6 +151,7 @@ def test_cloudflare_classifier_wraps_the_evaluation_request() -> None:
         client=client,
         endpoint="/ai/run",
         wrap_input=True,
+        headers={"cf-aig-gateway-id": "default"},
     )
 
     assert asyncio.run(classifier.injection_probability("chunk")) == 0.88

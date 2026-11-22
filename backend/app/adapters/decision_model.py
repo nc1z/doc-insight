@@ -20,6 +20,7 @@ class DecisionModelClassifier:
         client: httpx.AsyncClient | None = None,
         endpoint: str = "/v1/systemone",
         wrap_input: bool = False,
+        headers: dict[str, str] | None = None,
     ) -> None:
         self._model = model
         self._api_key = api_key
@@ -28,6 +29,7 @@ class DecisionModelClassifier:
         self._catalog = catalog
         self._client = client
         self._wrap_input = wrap_input
+        self._headers = headers or {}
 
     @classmethod
     def from_settings(cls, settings: Settings) -> DecisionModelClassifier:
@@ -71,7 +73,7 @@ class DecisionModelClassifier:
             response = await client.post(
                 self._url,
                 json=payload,
-                headers={"Authorization": f"Bearer {self._api_key}"},
+                headers={"Authorization": f"Bearer {self._api_key}", **self._headers},
             )
             response.raise_for_status()
             body = response.json()
@@ -95,6 +97,7 @@ class CloudflareClassifier(DecisionModelClassifier):
             catalog=load_system_prompts(settings.system_prompts_path),
             endpoint="/ai/run",
             wrap_input=True,
+            headers={"cf-aig-gateway-id": settings.cloudflare_ai_gateway_id},
         )
 
 

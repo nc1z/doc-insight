@@ -5,6 +5,8 @@ from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
+from pydantic_ai.messages import ModelResponse, TextPart
+from pydantic_ai.models.function import FunctionModel
 from pypdf import PdfWriter
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
@@ -116,7 +118,12 @@ def test_factory_selects_the_gateway_summary_client() -> None:
     summary = build_llm(hosted)
     assert isinstance(summary, GatewaySummaryClient)
     assert summary._base_url == "https://llm.example/accounts/acct/ai/v1"
+    assert summary._gateway_id == "default"
     assert isinstance(build_classifier(hosted), DecisionModelClassifier)
+
+
+def test_invalid_model_output_fails_the_document_once(migrated_database_url: str) -> None:
+    asyncio.run(_invalid_output(migrated_database_url))
 
 
 def test_mock_pipeline_stores_the_summary_and_report(migrated_database_url: str) -> None:
@@ -245,6 +252,60 @@ async def _stores_results(database_url: str) -> None:
         }
         assert missing.status_code == 404
         assert missing.json()["code"] == "not_found"
+    finally:
+        bind_pipeline(None)
+        await _clear(engine)
+        await engine.dispose()
+
+
+async def _invalid_output(database_url: str) -> None:
+    engine = create_engine(database_url)
+    repository = PostgresJobRepository(create_session_factory(engine), build_queue(database_url))
+    storage = _Storage()
+    calls: list[int] = []
+
+    def respond(_messages: list[object], _info: object) -> ModelResponse:
+        calls.append(1)
+        return ModelResponse(parts=[TextPart(content="not json")])
+
+    bind_pipeline(
+        DocumentPipeline(
+            repository,
+            GatewaySummaryClient(
+                model="glm-4.7",
+                api_key="test-key",
+                base_url="https://llm.example/accounts/acct/ai/v1",
+                timeout=5,
+                output_retries=1,
+                chat=FunctionModel(respond),
+            ),
+            MockClassifier(),
+            storage,
+            delay_seconds=0,
+            chunk_token_budget=2048,
+        )
+    )
+    try:
+        with _client(database_url, storage) as client:
+            created = client.post(
+                "/jobs",
+                files=[("files", ("desk-note.pdf", _pdf(), "application/pdf"))],
+            )
+            job_id = created.json()["id"]
+            document_id = UUID(client.get(f"/jobs/{job_id}").json()["documents"][0]["id"])
+            await run_document(repository, document_id)
+            body = client.get(f"/jobs/{job_id}").json()
+            usage = client.get("/admin/usage", params={"job_id": job_id}).json()
+        assert body["status"] == "awaiting_input"
+        assert body["documents"][0]["status"] == "failed"
+        assert body["documents"][0]["error"] == {
+            "code": "step_failed",
+            "message": "The step failed.",
+            "details": None,
+        }
+        assert body["report"] is None
+        assert len(calls) == 2
+        assert usage["totals"]["calls"] == 0
     finally:
         bind_pipeline(None)
         await _clear(engine)

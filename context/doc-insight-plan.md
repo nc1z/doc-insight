@@ -322,7 +322,7 @@ The check reads the PDF. An injection phrase, a fake role marker (`SYSTEM:`, `</
 - [x] Use the configured decision model for inferred document type (a choice from a fixed list).
 - [x] Add `prompts.yaml` in `app/pipeline/` and `load_system_prompts`, which validates every entry (ID, version, template, placeholders) at startup; the path comes from config. Keep the classifier questions and option descriptions in that file, not in code.
 
-Each stored chunk is sent to the configured decision model. The model returns the probability that the chunk contains instructions aimed at the model. A probability above `CLASSIFIER_FLAG_THRESHOLD` (default 0.7) marks the document flagged. The same model picks a document type from the fixed list in `prompts.yaml`, and the summary stores that choice. The questions and the option descriptions are in that file. `load_system_prompts` checks every entry's id, version, template, and placeholders when the API and the worker start. The path is `SYSTEM_PROMPTS_PATH`. The configured default provider is `cloudflare`. Set `CLASSIFIER_PROVIDER` to `mock` when there is no Cloudflare account; CI does that. The `cloudflare` provider posts to the gateway evaluation endpoint (`/ai/run`) with the model from config. The `jev` provider posts to `/v1/systemone`. Pydantic AI is not used for this call.
+Each stored chunk is sent to the configured decision model. The model returns the probability that the chunk contains instructions aimed at the model. A probability above `CLASSIFIER_FLAG_THRESHOLD` (default 0.7) marks the document flagged. The same model picks a document type from the fixed list in `prompts.yaml`, and the summary stores that choice. The questions and the option descriptions are in that file. `load_system_prompts` checks every entry's id, version, template, and placeholders when the API and the worker start. The path is `SYSTEM_PROMPTS_PATH`. The configured default provider is `cloudflare`. Set `CLASSIFIER_PROVIDER` to `mock` when there is no Cloudflare account; CI does that. The `cloudflare` provider posts to the gateway evaluation endpoint (`/ai/run`) with the model from config, and sends `cf-aig-gateway-id` from `CLOUDFLARE_AI_GATEWAY_ID`. The `jev` provider posts to `/v1/systemone`. Pydantic AI is not used for this call.
 
 ### 5C. Flagging
 
@@ -366,7 +366,7 @@ Solves flow step 6: the job's results contain real key details and a report.
 - [x] Parse each response into the document schema and retry up to a configured limit when it does not match.
 - [x] Add a per-call timeout. No tools. The pipeline order stays fixed.
 
-`GatewaySummaryClient` in `backend/app/adapters/summary_client.py` is the summary client. `LLM_PROVIDER=cloudflare` posts to `{LLM_BASE_URL}/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai/v1/chat/completions`. The model name is `LLM_MODEL`. Pydantic AI checks the reply against the document schema or the report schema. A reply that does not match is asked again, up to `LLM_OUTPUT_RETRIES`. Each call stops at `LLM_TIMEOUT_SECONDS`. The model is not given tools, and this client does not choose the next pipeline step. `LLM_PROVIDER` stays `mock` until a real summary is wanted. The mock still returns the fixed summary text.
+`GatewaySummaryClient` in `backend/app/adapters/summary_client.py` is the summary client. `LLM_PROVIDER=cloudflare` posts to `{LLM_BASE_URL}/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai/v1/chat/completions` and sends `cf-aig-gateway-id` from `CLOUDFLARE_AI_GATEWAY_ID`. The model name is `LLM_MODEL`. Pydantic AI checks the reply against the document schema or the report schema. A reply that does not match is asked again, up to `LLM_OUTPUT_RETRIES`. Each call stops at `LLM_TIMEOUT_SECONDS`. The model is not given tools, and this client does not choose the next pipeline step. `LLM_PROVIDER` stays `mock` until a real summary is wanted. The mock still returns the fixed summary text.
 
 ### 6C. Prompts
 
@@ -393,12 +393,16 @@ A notable point stays when its quote is on the page it names (`backend/app/pipel
 
 ### 6F. Tests and Manual Verification
 
-- [ ] Tests with the mock provider: valid output passes, invalid output retries then fails cleanly, citation checks catch a wrong page.
-- [ ] Manual: set a real GLM key in `.env`, upload `samples/`, and inspect the report through Bruno.
+- [x] Tests with the mock provider: valid output passes, invalid output retries then fails cleanly, citation checks catch a wrong page.
+- [x] Manual: set a real GLM key in `.env`, upload `samples/`, and inspect the report through Bruno.
+
+A mock summary whose quote is on the cited page keeps that notable point. A quote from another page, or from words the page does not contain, is left out. When a reply does not match the schema, Pydantic AI asks again up to `LLM_OUTPUT_RETRIES`. If it still does not match, that document fails and the job returns to the confirmation step, where the analyst can retry it, re-upload, or continue without it. The failed attempt stores no usage row. A live run with `LLM_PROVIDER=cloudflare` and `LLM_MODEL=@cf/zai-org/glm-5.3` summarised `samples/desk-note.pdf` and wrote a report from that summary.
 
 ### 6G. Learning Checkpoint
 
-- [ ] Learning: explain the code changes in small chunks with file names, short snippets, layman explanations, and how schemas, retries, and citation checks make LLM output trustworthy.
+- [x] Learning: explain the code changes in small chunks with file names, short snippets, layman explanations, and how schemas, retries, and citation checks make LLM output trustworthy.
+
+Each chunk is read for topics, people, companies, places, dates, and notable points, each point with a page and a quote (`backend/app/pipeline/steps.py`). One later call reads those replies and writes the document summary. A last call reads the finished summaries and writes the report. The summary client checks every reply against that schema (`backend/app/adapters/summary_client.py`). A reply that does not match is asked again, up to `LLM_OUTPUT_RETRIES`, before the document fails. A quote stays only when those words are on the page it names (`backend/app/pipeline/citations.py`). A point whose quote is missing is left out. The model, the prompt version, the tokens, and the latency go to `GET /admin/usage`. `GET /jobs/{id}` stays the status and the results.
 
 Suggested commit message: `feat(backend): add LLM document summaries and consolidated report`
 
