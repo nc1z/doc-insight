@@ -360,8 +360,8 @@ Document text is untrusted data. Guardrails run in layers, cheapest first.
 ### Document summary
 
 - Each document is summarised separately, in parallel, as its own queue task. The payload is the document id.
-- Long documents are split into chunks. Each chunk is summarised, then the chunk summaries are combined into the document's key details (map-reduce), within a configurable token budget.
-- The combine step receives relevant source excerpts alongside the chunk summaries, which improves faithfulness and reduces hallucination.
+- Long documents are split into chunks. Each chunk returns structured fields: topics, entities, and notable points with a page and a quote. The last call reads those fields and writes the document summary (map-reduce), within a configurable token budget. A prose summary of a chunk drops facts the last call never sees.
+- The combine step also receives relevant source excerpts alongside those structured fields, which improves faithfulness and reduces hallucination.
 - The output follows the per-document schema: title, inferred type, short summary, main topics, key entities, and notable points, each with a page number and a supporting quote.
 
 ### Consolidated summary
@@ -385,10 +385,10 @@ Document text is untrusted data. Guardrails run in layers, cheapest first.
 
 ### Prompts in one file
 
-- Every prompt the pipeline uses lives in one file, `backend/app/pipeline/prompts.yaml`: system prompts, user prompt templates, and Jev questions with their option descriptions.
+- Every prompt the pipeline uses lives in one file, `backend/app/pipeline/prompts.yaml`: system prompts, user prompt templates, and classifier questions with their option descriptions.
 - Maintainers tune behaviour by editing that file only; no prompt text lives in code.
 - Each entry has an ID, a version, and a template with named placeholders (for example `{document_text}`).
-- The file is loaded and validated at startup: a missing prompt or an unknown placeholder fails fast instead of failing mid-job.
+- `load_system_prompts` validates the file at startup: a missing system prompt or an unknown placeholder fails fast instead of failing mid-job.
 - The prompt ID and version are recorded with every LLM call, used in the cache key, and changing the file triggers the evals.
 - The file path is configurable, so a different prompt set can be swapped in without code changes.
 
@@ -397,7 +397,7 @@ Document text is untrusted data. Guardrails run in layers, cheapest first.
 Each step picks its model through configuration (strategy pattern). The pipeline has few judgement calls: control flow is fixed, and most work is generating structured summaries. So the steps split into two kinds, each with a model suited to it.
 
 - **Decisions: [Jev](https://typesafe.ai/blog/introducing-system-one-models-and-jev)** (TypeSafe AI). A non-generative decision model: it takes text plus typed questions and returns a fixed option, a rubric score, or a yes/no probability, with calibrated confidence. Outputs are type-safe by construction, it is very fast, and input costs about $0.04 per million tokens with free output. Used for:
-  - Prompt-injection detection per chunk (yes/no probability, with a configurable threshold).
+  - Prompt-injection detection per chunk (yes/no probability). A chunk above `CLASSIFIER_FLAG_THRESHOLD` (default 0.7) marks the document flagged.
   - Inferred document type (choice from a fixed list).
 - **Generation: GLM 4.7 or later** (Z.AI). Used for document summaries and consolidation, where the output is free text inside a schema (summaries, entities, themes, contradictions).
   - Request JSON output, then validate it against the Pydantic schema and retry on invalid output.
@@ -418,7 +418,6 @@ Each step picks its model through configuration (strategy pattern). The pipeline
 
 - **Flagged documents**: process them with hardened prompts and a warning, or pause the job for the analyst to decide, as with rejected files.
 - **GLM version**: GLM 4.7 with JSON mode and validation, or a newer version with schema-constrained output.
-- **Injection threshold**: the Jev probability above which a chunk is flagged, tuned on the adversarial eval set.
 
 ## UI/UX
 

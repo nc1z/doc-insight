@@ -10,7 +10,7 @@ from app.pipeline.models import ExtractInput, PageText
 from app.pipeline.steps import extract_text
 
 _SAMPLES = Path(__file__).resolve().parents[2] / "samples"
-_BUDGET = Settings(_env_file=None).chunk_token_budget
+_BUDGET = Settings(_env_file=None, classifier_provider="mock").chunk_token_budget
 
 
 def test_a_short_page_is_one_chunk() -> None:

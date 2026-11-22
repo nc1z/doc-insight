@@ -11,7 +11,7 @@ _REPO_ROOT = _BACKEND_DIR.parent
 StorageProvider = Literal["s3"]
 QueueProvider = Literal["procrastinate"]
 LlmProvider = Literal["mock", "openai_compatible"]
-ClassifierProvider = Literal["mock", "jev"]
+ClassifierProvider = Literal["mock", "cloudflare", "jev"]
 
 
 class Settings(BaseSettings):
@@ -46,10 +46,17 @@ class Settings(BaseSettings):
     step_timeout_seconds: float = Field(default=60, gt=0)
     chunk_token_budget: int = Field(default=2048, gt=0)
 
-    classifier_provider: ClassifierProvider = "mock"
-    classifier_model: str = Field(default="jev", min_length=1)
+    classifier_provider: ClassifierProvider = "cloudflare"
+    classifier_model: str = Field(default="typesafe/jev", min_length=1)
+    classifier_base_url: str = Field(
+        default="https://api.cloudflare.com/client/v4",
+        min_length=1,
+    )
+    cloudflare_account_id: str = ""
     classifier_api_key: SecretStr = SecretStr("")
     classifier_timeout_seconds: float = Field(default=30, gt=0)
+    classifier_flag_threshold: float = Field(default=0.7, ge=0, le=1)
+    system_prompts_path: Path = Path("app/pipeline/prompts.yaml")
 
     @model_validator(mode="after")
     def hosted_providers_need_credentials(self) -> Self:
@@ -67,6 +74,20 @@ class Settings(BaseSettings):
                 raise ValueError(f"{required} is required when LLM_PROVIDER is openai_compatible")
         if self.classifier_provider == "jev" and not self.classifier_api_key.get_secret_value():
             raise ValueError("CLASSIFIER_API_KEY is required when CLASSIFIER_PROVIDER is jev")
+        if self.classifier_provider == "cloudflare":
+            missing = [
+                name
+                for name, present in (
+                    ("CLASSIFIER_API_KEY", self.classifier_api_key.get_secret_value()),
+                    ("CLOUDFLARE_ACCOUNT_ID", self.cloudflare_account_id),
+                )
+                if not present
+            ]
+            if missing:
+                required = " and ".join(missing)
+                raise ValueError(f"{required} is required when CLASSIFIER_PROVIDER is cloudflare")
+        if not self.system_prompts_path.is_absolute():
+            self.system_prompts_path = _BACKEND_DIR / self.system_prompts_path
         return self
 
 

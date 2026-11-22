@@ -13,6 +13,11 @@ from sqlalchemy.engine.url import make_url
 _TEST_PORT = 5433
 
 
+@pytest.fixture(autouse=True)
+def _classifier_provider_for_tests(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CLASSIFIER_PROVIDER", "mock")
+
+
 def _connect(admin_url: str) -> psycopg.Connection[tuple[object, ...]]:
     sync_url = make_url(admin_url).set(drivername="postgresql")
     try:

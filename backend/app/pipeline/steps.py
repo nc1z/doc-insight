@@ -1,5 +1,6 @@
 import asyncio
 import json
+from collections.abc import Sequence
 
 from app.domain.ports import Classifier, LLMProvider
 from app.pipeline.extract import extract_pdf_pages
@@ -28,14 +29,21 @@ async def check_document(
     classifier: Classifier,
     *,
     delay_seconds: float,
+    chunks: Sequence[str] | None = None,
+    flag_threshold: float = 0.7,
 ) -> CheckResult:
     await asyncio.sleep(delay_seconds)
-    joined = "\n".join(page.text for page in text.pages)
-    classified = await classifier.classify(joined)
+    units = list(chunks) if chunks is not None else [page.text for page in text.pages]
+    readable = [unit for unit in units if unit.strip()]
+    scores = [await classifier.injection_probability(unit) for unit in readable]
+    score = max(scores, default=0.0)
+    document_type = await classifier.document_type("\n".join(readable))
+    flagged = score > flag_threshold
     return CheckResult(
-        flagged=classified.label == "injection",
-        label=classified.label,
-        score=classified.score,
+        flagged=flagged,
+        label="injection" if flagged else "benign",
+        score=score,
+        document_type=document_type,
     )
 
 
@@ -49,7 +57,13 @@ async def summarise_document(
 ) -> DocumentSummary:
     await asyncio.sleep(delay_seconds)
     body = "\n".join(page.text for page in text.pages)
-    prompt = f"summarise\nfilename: {document.filename}\nflagged: {check.flagged}\ntext: {body}"
+    prompt = (
+        "summarise\n"
+        f"filename: {document.filename}\n"
+        f"flagged: {check.flagged}\n"
+        f"document_type: {check.document_type}\n"
+        f"text: {body}"
+    )
     return DocumentSummary.model_validate_json(await llm.complete(prompt))
 
 

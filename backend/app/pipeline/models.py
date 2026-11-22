@@ -26,6 +26,7 @@ class CheckResult(BaseModel):
     flagged: bool
     label: str
     score: float
+    document_type: str
 
 
 class NotablePoint(BaseModel):

@@ -20,7 +20,7 @@ Findings from technical literature and industry guidance that shape the doc-insi
   - **Incremental updating** (refine): update a running summary chunk by chunk. More detail, less coherent.
 - [Context-aware hierarchical merging (ACL 2025)](https://doi.org/10.18653/v1/2025.findings-acl.289) found that adding relevant source excerpts during the merge step improves faithfulness and reduces hallucination.
 
-**For us**: keep map-reduce, and pass source excerpts alongside chunk summaries in the combine step.
+**For us**: keep map-reduce. Each chunk returns structured fields, because a prose summary of a chunk drops facts the last call never sees. The last call synthesizes those fields, and it also receives source excerpts.
 
 ### Chunk size
 

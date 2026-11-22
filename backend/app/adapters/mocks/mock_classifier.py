@@ -1,17 +1,19 @@
 from app.core.config import Settings
-from app.domain.ports import Classification
 
 _INJECTION = "ignore previous instructions"
 
 
 class MockClassifier:
-    """Flags one fixed phrase. Every other text is benign."""
+    """Scores one fixed phrase at 0.99. Every other text scores 0. Document type is other."""
 
     @classmethod
     def from_settings(cls, _settings: Settings) -> MockClassifier:
         return cls()
 
-    async def classify(self, text: str) -> Classification:
+    async def injection_probability(self, text: str) -> float:
         if _INJECTION in text.lower():
-            return Classification(label="injection", score=0.99)
-        return Classification(label="benign", score=0.0)
+            return 0.99
+        return 0.0
+
+    async def document_type(self, text: str) -> str:
+        return "other"

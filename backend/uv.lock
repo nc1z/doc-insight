@@ -7,7 +7,7 @@ resolution-markers = [
 ]
 
 [options]
-exclude-newer = "2026-11-15T05:31:47.92495Z"
+exclude-newer = "2026-11-15T06:13:33.297376Z"
 exclude-newer-span = "P7D"
 
 [[package]]
@@ -154,12 +154,14 @@ dependencies = [
     { name = "alembic" },
     { name = "boto3" },
     { name = "fastapi", extra = ["standard"] },
+    { name = "httpx" },
     { name = "pillow" },
     { name = "procrastinate" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pydantic-settings" },
     { name = "pymupdf4llm" },
     { name = "pypdf" },
+    { name = "pyyaml" },
     { name = "reportlab" },
     { name = "sqlalchemy", extra = ["asyncio"] },
     { name = "tiktoken" },
@@ -170,6 +172,7 @@ dev = [
     { name = "mypy" },
     { name = "pytest" },
     { name = "ruff" },
+    { name = "types-pyyaml" },
 ]
 
 [package.metadata]
@@ -177,12 +180,14 @@ requires-dist = [
     { name = "alembic", specifier = ">=1.20.1" },
     { name = "boto3", specifier = ">=1.44.3" },
     { name = "fastapi", extras = ["standard"], specifier = ">=0.162.7" },
+    { name = "httpx", specifier = ">=0.28.1" },
     { name = "pillow", specifier = ">=13.0.0" },
     { name = "procrastinate", specifier = ">=3.11.0" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.3.9" },
     { name = "pydantic-settings", specifier = ">=2.16.3" },
     { name = "pymupdf4llm", specifier = ">=2.1" },
     { name = "pypdf", specifier = ">=7.1.0" },
+    { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "reportlab", specifier = ">=5.1.0" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2" },
     { name = "tiktoken", specifier = ">=0.14.0" },
@@ -193,6 +198,7 @@ dev = [
     { name = "mypy", specifier = ">=2.4.1" },
     { name = "pytest", specifier = ">=9.2.0" },
     { name = "ruff", specifier = ">=0.17.5" },
+    { name = "types-pyyaml", specifier = ">=6.0.12.20261113" },
 ]
 
 [[package]]
@@ -2056,6 +2062,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/6c/aa/0de7986aa1fa856adb961c67345189b97d13f6e250b34ba68884df865f07/typer-0.29.1.tar.gz", hash = "sha256:ab6eb3880bf67ce96147734717f9ec333c06f66e361f3ea947d0be43da39f242", size = 205843, upload-time = "2026-11-11T09:18:39.782Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/05/ff/51969745f31cea6bcd12151e668febcf979656316e67a7755942267c1273/typer-0.29.1-py3-none-any.whl", hash = "sha256:00dbc549c13428bec1be55fe1f4d0fb8c6637a310e4f178ef14abe9534ee7b58", size = 121064, upload-time = "2026-11-11T09:18:38.671Z" },
+]
+
+[[package]]
+name = "types-pyyaml"
+version = "6.0.12.20261113"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/4d/8b/ba599d956693dbc98e170f32097128bdea0a17f9d42b0b490fa749c12b1a/types_pyyaml-6.0.12.20261113.tar.gz", hash = "sha256:0828be2580fd94151182364f4d0158e4de62fdbeeb8d4296f7f7d2b6c22bb640", size = 19017, upload-time = "2026-11-13T08:51:21.488Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fd/2e/36fc0941a40ef066dbc8abac41bbbefb41389f547c779aef832aea6b873d/types_pyyaml-6.0.12.20261113-py3-none-any.whl", hash = "sha256:3600749e613748afdc4327f0b17c3296cf880cdbc7335f320007abd9dd815f67", size = 21321, upload-time = "2026-11-13T08:51:20.417Z" },
 ]
 
 [[package]]

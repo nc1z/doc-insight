@@ -37,6 +37,7 @@ class DocumentPipeline:
         *,
         delay_seconds: float,
         chunk_token_budget: int,
+        flag_threshold: float = 0.7,
     ) -> None:
         self._jobs = repository
         self._llm = llm
@@ -44,6 +45,7 @@ class DocumentPipeline:
         self._files = storage
         self._delay = delay_seconds
         self._chunk_token_budget = chunk_token_budget
+        self._flag_threshold = flag_threshold
 
     async def run_step(self, document_id: UUID, status: DocumentStatus) -> None:
         progress = await self._jobs.document_progress(document_id)
@@ -52,10 +54,14 @@ class DocumentPipeline:
         extracted = await self._pages(document_id, progress, status)
         if status is DocumentStatus.EXTRACTING:
             return
+        stored_chunks = await self._jobs.list_chunks(document_id)
+        chunk_texts = [chunk.text for chunk in stored_chunks]
         checked = await check_document(
             extracted,
             self._classifier,
             delay_seconds=self._delay if status is DocumentStatus.CHECKING else 0,
+            chunks=chunk_texts or None,
+            flag_threshold=self._flag_threshold,
         )
         if status is DocumentStatus.CHECKING:
             if progress.storage_key is not None:

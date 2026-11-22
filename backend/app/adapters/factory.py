@@ -3,6 +3,7 @@ from collections.abc import Callable
 from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.adapters.decision_model import CloudflareClassifier, DecisionModelClassifier
 from app.adapters.jobs import PostgresJobRepository
 from app.adapters.mocks.mock_classifier import MockClassifier
 from app.adapters.mocks.mock_llm import MockLLM
@@ -77,6 +78,8 @@ _LLM_ADAPTERS: dict[str, LLMBuilder] = {
 }
 _CLASSIFIER_ADAPTERS: dict[str, ClassifierBuilder] = {
     "mock": MockClassifier.from_settings,
+    "cloudflare": CloudflareClassifier.from_settings,
+    "jev": DecisionModelClassifier.from_settings,
 }
 
 

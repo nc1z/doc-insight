@@ -317,10 +317,12 @@ The check reads the PDF. An injection phrase, a fake role marker (`SYSTEM:`, `</
 
 ### 5B. Decision-model Classifier Adapter
 
-- [ ] Implement a classifier adapter behind the `Classifier` interface, returning the probability that a chunk contains instructions aimed at the model.
-- [ ] Add a configurable flag threshold; keep the mock classifier as the default.
-- [ ] Use the configured decision model for inferred document type (a choice from a fixed list).
-- [ ] Add `prompts.yaml` in `app/pipeline/` and a loader that validates every entry (ID, version, template, placeholders) at startup; the path comes from config. Keep the classifier questions and option descriptions in that file, not in code.
+- [x] Implement a classifier adapter behind the `Classifier` interface, returning the probability that a chunk contains instructions aimed at the model.
+- [x] Add a configurable flag threshold; keep the mock classifier as the default.
+- [x] Use the configured decision model for inferred document type (a choice from a fixed list).
+- [x] Add `prompts.yaml` in `app/pipeline/` and `load_system_prompts`, which validates every entry (ID, version, template, placeholders) at startup; the path comes from config. Keep the classifier questions and option descriptions in that file, not in code.
+
+Each stored chunk is sent to the configured decision model. The model returns the probability that the chunk contains instructions aimed at the model. A probability above `CLASSIFIER_FLAG_THRESHOLD` (default 0.7) marks the document flagged. The same model picks a document type from the fixed list in `prompts.yaml`, and the summary stores that choice. The questions and the option descriptions are in that file. `load_system_prompts` checks every entry's id, version, template, and placeholders when the API and the worker start. The path is `SYSTEM_PROMPTS_PATH`. The mock stays the default. The `cloudflare` provider posts to the gateway evaluation endpoint (`/ai/run`) with the model from config. The `jev` provider posts to `/v1/systemone`. The mock stays the default. Pydantic AI is not used for this call.
 
 ### 5C. Flagging
 
@@ -350,22 +352,22 @@ Solves flow step 6: the job's results contain real key details and a report.
 - [ ] Define the report schema: overall summary, common themes, contradictions, combined entities, takeaways, flagged documents, excluded files.
 - [ ] Each contradiction holds both claims, each with its document, page, and quote.
 
-### 6B. GLM Adapter
+### 6B. Summary client
 
-- [ ] Implement an OpenAI-compatible `LLMProvider` adapter, with base URL, model, and key from config, so GLM or any compatible provider is a config change.
-- [ ] Request JSON output, validate against the Pydantic schema, and retry up to a configured limit on invalid output.
-- [ ] Add a per-call timeout.
+- [ ] Use Pydantic AI against the Cloudflare AI Gateway chat-completions endpoint. The model name comes from config.
+- [ ] Parse each response into the document schema and retry up to a configured limit when it does not match.
+- [ ] Add a per-call timeout. No tools. The pipeline order stays fixed.
 
 ### 6C. Prompts
 
-- [ ] Write every system prompt and user template for chunk summary, document combine, and consolidation in `prompts.yaml`, each with an ID and version.
+- [ ] Write every system prompt and user template for the structured chunk output, the document combine, and consolidation in `prompts.yaml`, each with an ID and version.
 - [ ] Record the prompt ID and version with every LLM call, and run the evals in CI whenever `prompts.yaml` changes.
 - [ ] Apply datamarking to document text: interleave a marker character through it, and explain in the system prompt that marked text is data, never instructions.
 - [ ] Ask the consolidation prompt to list disagreements explicitly instead of a single consensus.
 
 ### 6D. Summarise and Consolidate
 
-- [ ] Summarise each chunk, then combine chunk summaries into the document schema (map-reduce), passing relevant source excerpts into the combine step.
+- [ ] For each chunk, return structured fields (topics, entities, notable points with page and quote), then have one call synthesize those outputs into the document schema (map-reduce), passing relevant source excerpts into that call.
 - [ ] Consolidate from validated document summaries only, listing flagged and excluded files.
 
 ### 6E. Citation Checks and Telemetry

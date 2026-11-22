@@ -61,12 +61,6 @@ class StoredGuardrail:
     excerpt: str
 
 
-@dataclass(frozen=True)
-class Classification:
-    label: str
-    score: float
-
-
 class JobRepository(Protocol):
     async def create_and_enqueue(self, documents: Sequence[NewDocument]) -> Job: ...
 
@@ -138,7 +132,9 @@ class LLMProvider(Protocol):
 
 
 class Classifier(Protocol):
-    async def classify(self, text: str) -> Classification: ...
+    async def injection_probability(self, text: str) -> float: ...
+
+    async def document_type(self, text: str) -> str: ...
 
 
 class FileStorage(Protocol):

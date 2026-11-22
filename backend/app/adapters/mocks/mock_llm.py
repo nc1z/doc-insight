@@ -18,7 +18,7 @@ class MockLLM:
             return json.dumps(
                 {
                     "title": filename,
-                    "inferred_type": "other",
+                    "inferred_type": fields.get("document_type", "other"),
                     "summary": f"Mock summary of {filename}.",
                     "topics": ["mock"],
                     "entities": [],

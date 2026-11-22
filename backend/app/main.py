@@ -15,6 +15,7 @@ from app.core.db import create_engine, create_session_factory, get_session
 from app.core.errors import DomainError, register_exception_handlers
 from app.core.logging import RequestContextMiddleware, configure_logging
 from app.domain.ports import FileStorage
+from app.pipeline.prompts import load_system_prompts
 
 
 @asynccontextmanager
@@ -38,6 +39,7 @@ def create_app(
     file_storage: FileStorage | None = None,
 ) -> FastAPI:
     resolved = settings if settings is not None else get_settings()
+    load_system_prompts(resolved.system_prompts_path)
     configure_logging()
     application = FastAPI(title="Doc Insight API", lifespan=lifespan)
     register_exception_handlers(application)

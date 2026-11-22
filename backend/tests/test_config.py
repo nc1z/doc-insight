@@ -30,8 +30,12 @@ _ENV_KEYS = (
     "CHUNK_TOKEN_BUDGET",
     "CLASSIFIER_PROVIDER",
     "CLASSIFIER_MODEL",
+    "CLASSIFIER_BASE_URL",
+    "CLOUDFLARE_ACCOUNT_ID",
     "CLASSIFIER_API_KEY",
     "CLASSIFIER_TIMEOUT_SECONDS",
+    "CLASSIFIER_FLAG_THRESHOLD",
+    "SYSTEM_PROMPTS_PATH",
 )
 
 
@@ -40,15 +44,19 @@ def _clear_env(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv(key, raising=False)
 
 
-def test_mock_defaults_need_no_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     _clear_env(monkeypatch)
 
-    settings = Settings(_env_file=None)
+    settings = Settings(
+        _env_file=None,
+        classifier_api_key="test-key",
+        cloudflare_account_id="acct",
+    )
 
     assert settings.llm_provider == "mock"
-    assert settings.classifier_provider == "mock"
+    assert settings.classifier_provider == "cloudflare"
     assert settings.llm_api_key.get_secret_value() == ""
-    assert settings.classifier_api_key.get_secret_value() == ""
+    assert settings.classifier_api_key.get_secret_value() == "test-key"
     assert settings.max_file_bytes == 20 * 1024 * 1024
     assert settings.awaiting_input_timeout_seconds == 24 * 60 * 60
     assert settings.orphan_max_age_seconds == 60 * 60
@@ -56,6 +64,11 @@ def test_mock_defaults_need_no_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.mock_step_delay_seconds == 1
     assert settings.step_timeout_seconds == 60
     assert settings.chunk_token_budget == 2048
+    assert settings.classifier_flag_threshold == 0.7
+    assert settings.classifier_model == "typesafe/jev"
+    assert settings.classifier_base_url == "https://api.cloudflare.com/client/v4"
+    assert settings.cloudflare_account_id == "acct"
+    assert settings.system_prompts_path.name == "prompts.yaml"
     assert settings.queue_provider == "procrastinate"
     assert settings.storage_provider == "s3"
     assert settings.s3_endpoint == "http://localhost:9000"
@@ -69,7 +82,7 @@ def test_environment_overrides_defaults(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setenv("MAX_FILE_COUNT", "3")
     monkeypatch.setenv("LLM_TIMEOUT_SECONDS", "15")
 
-    settings = Settings(_env_file=None)
+    settings = Settings(_env_file=None, classifier_provider="mock")
 
     assert settings.max_file_count == 3
     assert settings.llm_timeout_seconds == 15
@@ -87,12 +100,20 @@ def test_hosted_llm_accepts_credentials(monkeypatch: pytest.MonkeyPatch) -> None
 
     settings = Settings(
         _env_file=None,
+        classifier_provider="mock",
         llm_provider="openai_compatible",
         llm_base_url="https://example.test/v1",
         llm_api_key="test-key",
     )
 
     assert settings.llm_api_key.get_secret_value() == "test-key"
+
+
+def test_cloudflare_requires_api_key_and_account(monkeypatch: pytest.MonkeyPatch) -> None:
+    _clear_env(monkeypatch)
+
+    with pytest.raises(ValidationError, match="CLASSIFIER_API_KEY and CLOUDFLARE_ACCOUNT_ID"):
+        Settings(_env_file=None, classifier_provider="cloudflare")
 
 
 def test_jev_requires_api_key(monkeypatch: pytest.MonkeyPatch) -> None:

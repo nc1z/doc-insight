@@ -9,6 +9,7 @@ from pypdf import PdfWriter
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from app.adapters.decision_model import CloudflareClassifier, DecisionModelClassifier
 from app.adapters.factory import build_classifier, build_llm
 from app.adapters.jobs import PostgresJobRepository
 from app.adapters.mocks.mock_classifier import MockClassifier
@@ -60,14 +61,24 @@ def test_check_flags_the_injection_phrase() -> None:
 
     assert injected.flagged is True
     assert injected.label == "injection"
+    assert injected.score == 0.99
+    assert injected.document_type == "other"
     assert benign.flagged is False
+    assert benign.document_type == "other"
 
 
-def test_factory_selects_the_mock_providers() -> None:
-    settings = Settings(_env_file=None)
+def test_factory_selects_the_mock_llm_and_the_cloudflare_classifier(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("CLASSIFIER_PROVIDER", raising=False)
+    settings = Settings(
+        _env_file=None,
+        classifier_api_key="test-key",
+        cloudflare_account_id="acct",
+    )
 
     assert isinstance(build_llm(settings), MockLLM)
-    assert isinstance(build_classifier(settings), MockClassifier)
+    assert isinstance(build_classifier(settings), CloudflareClassifier)
 
 
 def test_factory_rejects_an_unregistered_provider() -> None:
@@ -82,8 +93,7 @@ def test_factory_rejects_an_unregistered_provider() -> None:
 
     with pytest.raises(ValueError, match="Unknown LLM provider: openai_compatible"):
         build_llm(hosted)
-    with pytest.raises(ValueError, match="Unknown classifier provider: jev"):
-        build_classifier(hosted)
+    assert isinstance(build_classifier(hosted), DecisionModelClassifier)
 
 
 def test_mock_pipeline_stores_the_summary_and_report(migrated_database_url: str) -> None:
@@ -136,6 +146,7 @@ async def _worker_reaches_succeeded(database_url: str) -> None:
         assert body["status"] == "succeeded"
         assert body["progress"] == {"completed_steps": 3, "total_steps": 3}
         assert body["documents"][0]["summary"]["summary"] == "Mock summary of desk-note.pdf."
+        assert body["documents"][0]["summary"]["inferred_type"] == "other"
         assert body["report"]["summary"] == "Mock report of desk-note.pdf."
         assert body["report"]["excluded_files"] == []
     finally:
@@ -177,6 +188,7 @@ async def _stores_results(database_url: str) -> None:
         assert body["documents"][0]["flagged"] is False
         assert body["documents"][0]["summary"]["title"] == "desk-note.pdf"
         assert body["documents"][0]["summary"]["summary"] == "Mock summary of desk-note.pdf."
+        assert body["documents"][0]["summary"]["inferred_type"] == "other"
         assert body["report"]["summary"] == "Mock report of desk-note.pdf."
         assert body["report"]["excluded_files"] == []
         assert [(page.page_number, page.text, page.needs_image) for page in pages] == [
