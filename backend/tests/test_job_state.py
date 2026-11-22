@@ -37,6 +37,6 @@ def test_other_transitions_conflict(current: JobStatus, target: JobStatus) -> No
 
     error = caught.value
     assert error.status_code == 409
-    assert error.code == "invalid_transition"
+    assert error.code == "invalid_job_state"
     assert error.message == f"The job cannot move from {current} to {target}."
     assert error.details == {"from": current.value, "to": target.value}

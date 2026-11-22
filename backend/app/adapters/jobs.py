@@ -7,13 +7,15 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
 from app.adapters.queue import PROCESS_JOB
+from app.core.errors import DomainError
+from app.domain.job_state import transition
 from app.domain.models import Document, Job
 from app.domain.ports import NewDocument, NewRejection
 from app.domain.status import DocumentStatus, JobStatus
 
 
 class PostgresJobRepository:
-    """Creates the job row and the Procrastinate queue row in one transaction."""
+    """Persists jobs. Confirm enqueues the worker task in the same transaction."""
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession], queue: App) -> None:
         self._sessions = session_factory
@@ -59,9 +61,85 @@ class PostgresJobRepository:
                 options=[selectinload(Job.documents)],
             )
 
+    async def add_documents(
+        self,
+        job_id: UUID,
+        documents: Sequence[NewDocument],
+        rejected: Sequence[NewRejection],
+    ) -> Job | None:
+        async with self._sessions() as session, session.begin():
+            job = await self._locked(session, job_id)
+            if job is None:
+                return None
+            job.status = transition(job.status, JobStatus.AWAITING_INPUT)
+            pending = _rejections_by_name(job)
+            for document in documents:
+                existing = pending.pop(document.filename, None)
+                if existing is None:
+                    job.documents.append(_document(document))
+                else:
+                    _accept(existing, document)
+            for rejection in rejected:
+                existing = pending.get(rejection.filename)
+                if existing is None:
+                    job.documents.append(_rejected_document(rejection))
+                else:
+                    existing.rejection_reason = rejection.code
+            await session.flush()
+        return job
+
+    async def confirm(self, job_id: UUID) -> Job | None:
+        async with self._sessions() as session, session.begin():
+            job = await self._locked(session, job_id)
+            if job is None:
+                return None
+            job.status = transition(job.status, JobStatus.QUEUED)
+            stored = [document for document in job.documents if document.storage_key is not None]
+            if not stored:
+                raise DomainError(422, "validation_error", "The job has no documents to process.")
+            for document in job.documents:
+                if document.storage_key is None and not document.excluded:
+                    document.excluded = True
+            await session.flush()
+            await self._enqueue(await _driver_connection(session), job.id)
+        return job
+
+    async def cancel(self, job_id: UUID) -> Job | None:
+        async with self._sessions() as session, session.begin():
+            job = await self._locked(session, job_id)
+            if job is None:
+                return None
+            job.status = transition(job.status, JobStatus.CANCELLED)
+            await session.flush()
+        return job
+
+    async def _locked(self, session: AsyncSession, job_id: UUID) -> Job | None:
+        return await session.get(
+            Job,
+            job_id,
+            options=[selectinload(Job.documents)],
+            with_for_update=True,
+        )
+
     async def _enqueue(self, connection: psycopg.AsyncConnection, job_id: UUID) -> None:
         task = self._queue.tasks[PROCESS_JOB]
         await task.configure(connection=connection).defer_async(job_id=str(job_id))
+
+
+def _rejections_by_name(job: Job) -> dict[str, Document]:
+    return {
+        document.filename: document
+        for document in job.documents
+        if document.storage_key is None and not document.excluded
+    }
+
+
+def _accept(document: Document, item: NewDocument) -> None:
+    document.storage_key = item.storage_key
+    document.sha256 = item.sha256
+    document.page_count = item.page_count
+    document.status = DocumentStatus.PENDING
+    document.rejection_reason = None
 
 
 def _rejected_document(item: NewRejection) -> Document:

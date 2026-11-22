@@ -24,7 +24,7 @@ def transition(current: JobStatus, target: JobStatus) -> JobStatus:
     if target not in _TRANSITIONS[current]:
         raise DomainError(
             409,
-            "invalid_transition",
+            "invalid_job_state",
             f"The job cannot move from {current} to {target}.",
             {"from": current.value, "to": target.value},
         )

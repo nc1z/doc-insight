@@ -38,3 +38,4 @@ backend/evals/generated/
 
 # Others
 original.md
+.cursor/

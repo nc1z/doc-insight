@@ -10,13 +10,15 @@ from fastapi.responses import JSONResponse
 from app.adapters.factory import get_file_storage, get_job_repository
 from app.core.config import Settings, get_settings
 from app.core.errors import DomainError, ErrorBody
+from app.domain.job_state import transition
 from app.domain.models import Document, Job
 from app.domain.ports import FileStorage, JobRepository, NewDocument, NewRejection
-from app.domain.status import DocumentStatus
+from app.domain.status import DocumentStatus, JobStatus
 from app.domain.validation import (
     AcceptedFile,
     FileRejection,
     IncomingFile,
+    ValidationStrategy,
     default_strategies,
     message_for,
     validate_files,
@@ -59,14 +61,7 @@ async def create_job(
     jobs: Annotated[JobRepository, Depends(get_job_repository)],
 ) -> JSONResponse:
     incoming = [await _incoming_file(upload) for upload in files]
-    result = validate_files(
-        incoming,
-        default_strategies(
-            max_file_bytes=settings.max_file_bytes,
-            max_page_count=settings.max_page_count,
-            max_file_count=settings.max_file_count,
-        ),
-    )
+    result = validate_files(incoming, _strategies(settings))
     if result.error is not None:
         raise DomainError(422, result.error.code.value, result.error.message)
     if not result.accepted:
@@ -98,6 +93,83 @@ async def create_job(
     job = await jobs.create_and_enqueue(stored)
     queued = QueuedJob(id=job.id, status=job.status.value)
     return JSONResponse(status_code=202, content=queued.model_dump(mode="json"))
+
+
+@router.post(
+    "/jobs/{id}/documents",
+    response_model=JobView,
+    responses={404: {"model": ErrorBody}, 409: {"model": ErrorBody}, 422: {"model": ErrorBody}},
+)
+async def add_job_documents(
+    id: UUID,
+    files: Annotated[list[UploadFile], File()],
+    settings: Annotated[Settings, Depends(get_settings)],
+    storage: Annotated[FileStorage, Depends(get_file_storage)],
+    jobs: Annotated[JobRepository, Depends(get_job_repository)],
+) -> JobView:
+    await _require_waiting(jobs, id)
+    incoming = [await _incoming_file(upload) for upload in files]
+    result = validate_files(incoming, _strategies(settings))
+    if result.error is not None:
+        raise DomainError(422, result.error.code.value, result.error.message)
+    stored = await _store_accepted(storage, result.accepted)
+    rejected = [
+        NewRejection(filename=item.filename, code=item.code.value) for item in result.rejected
+    ]
+    job = await jobs.add_documents(id, stored, rejected)
+    if job is None:
+        raise DomainError(404, "not_found", "The job was not found.")
+    return _job_view(job)
+
+
+@router.post(
+    "/jobs/{id}/confirm",
+    response_model=JobView,
+    status_code=202,
+    responses={404: {"model": ErrorBody}, 409: {"model": ErrorBody}},
+)
+async def confirm_job(
+    id: UUID,
+    jobs: Annotated[JobRepository, Depends(get_job_repository)],
+) -> JobView:
+    job = await jobs.confirm(id)
+    if job is None:
+        raise DomainError(404, "not_found", "The job was not found.")
+    return _job_view(job)
+
+
+@router.post(
+    "/jobs/{id}/cancel",
+    response_model=JobView,
+    responses={404: {"model": ErrorBody}, 409: {"model": ErrorBody}},
+)
+async def cancel_job(
+    id: UUID,
+    storage: Annotated[FileStorage, Depends(get_file_storage)],
+    jobs: Annotated[JobRepository, Depends(get_job_repository)],
+) -> JobView:
+    job = await jobs.cancel(id)
+    if job is None:
+        raise DomainError(404, "not_found", "The job was not found.")
+    for document in job.documents:
+        if document.storage_key is not None:
+            await storage.delete(document.storage_key)
+    return _job_view(job)
+
+
+async def _require_waiting(jobs: JobRepository, job_id: UUID) -> None:
+    job = await jobs.get(job_id)
+    if job is None:
+        raise DomainError(404, "not_found", "The job was not found.")
+    transition(job.status, JobStatus.AWAITING_INPUT)
+
+
+def _strategies(settings: Settings) -> tuple[ValidationStrategy, ...]:
+    return default_strategies(
+        max_file_bytes=settings.max_file_bytes,
+        max_page_count=settings.max_page_count,
+        max_file_count=settings.max_file_count,
+    )
 
 
 async def _incoming_file(upload: UploadFile) -> IncomingFile:

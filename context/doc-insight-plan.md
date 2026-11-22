@@ -184,13 +184,15 @@ Solves flow step 2: a client (Bruno) reads any job's state and resolves rejected
 
 - [x] Add a state machine in `app/domain/job_state.py` listing allowed transitions; invalid transitions raise a domain error mapped to `409 Conflict`.
 
-`transition` lists the allowed status changes. A waiting job can stay waiting, be confirmed into `queued`, be cancelled, or expire. The worker moves `queued` to `running`, then `consolidating`, then `succeeded`, or to `failed` from either active state. Any other change raises `invalid_transition` with status `409`.
+`transition` lists the allowed status changes. A waiting job can stay waiting, be confirmed into `queued`, be cancelled, or expire. The worker moves `queued` to `running`, then `consolidating`, then `succeeded`, or to `failed` from either active state. Any other change raises `invalid_job_state` with status `409`.
 
 ### 2C. Re-upload, Confirm, and Cancel
 
-- [ ] `POST /jobs/{id}/documents`: validate and store new files, add accepted ones, update the rejected list; job stays `awaiting_input`.
-- [ ] `POST /jobs/{id}/confirm`: mark remaining rejected files as excluded, set `queued`, and enqueue in one transaction; return `202`.
-- [ ] `POST /jobs/{id}/cancel`: set `cancelled`, delete stored files, return `200` with the updated job.
+- [x] `POST /jobs/{id}/documents`: validate and store new files, add accepted ones, update the rejected list; job stays `awaiting_input`.
+- [x] `POST /jobs/{id}/confirm`: mark remaining rejected files as excluded, set `queued`, and enqueue in one transaction; return `202`.
+- [x] `POST /jobs/{id}/cancel`: set `cancelled`, delete stored files, return `200` with the updated job.
+
+`POST /jobs/{id}/documents` returns the updated job and stays `awaiting_input`. A valid file whose name matches a rejection replaces that rejection; other rejections stay. `POST /jobs/{id}/confirm` marks the remaining rejections excluded, sets `queued`, and enqueues in one transaction, returning `202`. `POST /jobs/{id}/cancel` sets `cancelled` and deletes the stored files. An action the current status does not allow returns `409` with code `invalid_job_state`.
 
 ### 2D. Expiry and Cleanup
 

@@ -31,6 +31,17 @@ class JobRepository(Protocol):
 
     async def get(self, job_id: UUID) -> Job | None: ...
 
+    async def add_documents(
+        self,
+        job_id: UUID,
+        documents: Sequence[NewDocument],
+        rejected: Sequence[NewRejection],
+    ) -> Job | None: ...
+
+    async def confirm(self, job_id: UUID) -> Job | None: ...
+
+    async def cancel(self, job_id: UUID) -> Job | None: ...
+
 
 class FileStorage(Protocol):
     async def ensure_bucket(self) -> None: ...
