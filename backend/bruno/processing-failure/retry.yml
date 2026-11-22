@@ -1,0 +1,32 @@
+info:
+  name: Retry the failed document
+  type: http
+  seq: 3
+
+http:
+  method: POST
+  url: "{{baseUrl}}/jobs/{{jobId}}/retry"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test("requeues the failed document", function () {
+          expect(res.body.status).to.equal("queued");
+          const failed = res.body.documents.find((item) => item.filename === "unreadable.pdf");
+          const other = res.body.documents.find((item) => item.filename === "desk-note.pdf");
+          expect(failed.status).to.equal("pending");
+          expect(failed.error).to.equal(null);
+          expect(other.status).to.equal("succeeded");
+        });
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "202"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

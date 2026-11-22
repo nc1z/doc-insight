@@ -1,0 +1,49 @@
+info:
+  name: Poll until the report is ready
+  type: http
+  seq: 6
+
+http:
+  method: GET
+  url: "{{baseUrl}}/jobs/{{jobId}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        const attempt = Number(bru.getVar("reportPollAttempt") || 0) + 1;
+        bru.setVar("reportPollAttempt", String(attempt));
+        const status = res.body.status;
+        const processing = ["queued", "running", "consolidating"];
+
+        test("report is processing or finished", function () {
+          expect(res.status).to.equal(200);
+          expect(processing.concat(["succeeded"])).to.include(status);
+        });
+
+        if (processing.includes(status) && attempt < 30) {
+          await bru.sleep(1000);
+          bru.setNextRequest("Poll until the report is ready");
+        } else {
+          bru.setVar("reportPollAttempt", "0");
+          test("the report lists the excluded file", function () {
+            expect(status).to.equal("succeeded");
+            expect(res.body.documents.map((item) => item.filename)).to.eql(["desk-note.pdf"]);
+            expect(res.body.documents[0].summary.summary).to.equal("Mock summary of desk-note.pdf.");
+            expect(res.body.report.summary).to.equal("Mock report of desk-note.pdf.");
+            expect(res.body.report.excluded_files).to.eql(["unreadable.pdf"]);
+            expect(res.body.excluded_files.map((item) => item.filename)).to.eql(["unreadable.pdf"]);
+            expect(res.body.progress).to.eql({ completed_steps: 3, total_steps: 3 });
+          });
+        }
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "200"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

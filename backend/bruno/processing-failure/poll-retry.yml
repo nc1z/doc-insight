@@ -1,0 +1,49 @@
+info:
+  name: Poll until the retry fails
+  type: http
+  seq: 4
+
+http:
+  method: GET
+  url: "{{baseUrl}}/jobs/{{jobId}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        const attempt = Number(bru.getVar("retryPollAttempt") || 0) + 1;
+        bru.setVar("retryPollAttempt", String(attempt));
+        const status = res.body.status;
+        const processing = ["queued", "running", "consolidating"];
+
+        test("retry is processing or waiting", function () {
+          expect(res.status).to.equal(200);
+          expect(processing.concat(["awaiting_input"])).to.include(status);
+        });
+
+        if (processing.includes(status) && attempt < 30) {
+          await bru.sleep(1000);
+          bru.setNextRequest("Poll until the retry fails");
+        } else {
+          bru.setVar("retryPollAttempt", "0");
+          test("the retried document failed again", function () {
+            expect(status).to.equal("awaiting_input");
+            const failed = res.body.documents.find((item) => item.filename === "unreadable.pdf");
+            const other = res.body.documents.find((item) => item.filename === "desk-note.pdf");
+            expect(failed.status).to.equal("failed");
+            expect(failed.error.code).to.equal("unreadable_document");
+            expect(other.status).to.equal("succeeded");
+            expect(res.body.report).to.equal(null);
+          });
+        }
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "200"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

@@ -1,0 +1,52 @@
+info:
+  name: Poll until the analyst is asked
+  type: http
+  seq: 2
+
+http:
+  method: GET
+  url: "{{baseUrl}}/jobs/{{jobId}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        const attempt = Number(bru.getVar("failPollAttempt") || 0) + 1;
+        bru.setVar("failPollAttempt", String(attempt));
+        const status = res.body.status;
+        const processing = ["queued", "running", "consolidating"];
+
+        test("job is processing or waiting", function () {
+          expect(res.status).to.equal(200);
+          expect(processing.concat(["awaiting_input"])).to.include(status);
+        });
+
+        if (processing.includes(status) && attempt < 30) {
+          await bru.sleep(1000);
+          bru.setNextRequest("Poll until the analyst is asked");
+        } else {
+          bru.setVar("failPollAttempt", "0");
+          test("one document failed and the other succeeded", function () {
+            expect(status).to.equal("awaiting_input");
+            const failed = res.body.documents.find((item) => item.filename === "unreadable.pdf");
+            const other = res.body.documents.find((item) => item.filename === "desk-note.pdf");
+            expect(failed.status).to.equal("failed");
+            expect(failed.error.code).to.equal("unreadable_document");
+            expect(failed.error.message).to.equal("The document could not be read.");
+            expect(other.status).to.equal("succeeded");
+            expect(other.summary.summary).to.equal("Mock summary of desk-note.pdf.");
+            expect(res.body.report).to.equal(null);
+            expect(res.body.excluded_files).to.eql([]);
+          });
+        }
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "200"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

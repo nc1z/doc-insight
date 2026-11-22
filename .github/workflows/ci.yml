@@ -56,6 +56,17 @@ jobs:
 
       - run: curl --fail http://localhost:8080/api/health
 
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm bruno
+
       - if: failure()
         run: docker compose logs
 

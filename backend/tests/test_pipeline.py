@@ -15,11 +15,13 @@ from app.adapters.mocks.mock_llm import MockLLM
 from app.adapters.queue import build_queue
 from app.core.config import Settings
 from app.core.db import create_engine, create_session_factory
+from app.domain.failures import StepFailure
 from app.main import create_app
 from app.pipeline.models import ExtractedText, ExtractInput, PageText
 from app.pipeline.steps import check_document, extract_text
 from app.worker.pipeline import DocumentPipeline
 from app.worker.processing import bind_pipeline, run_consolidation, run_document
+from app.worker.tasks import bind_jobs
 
 
 def test_extract_waits_for_the_configured_delay(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -36,6 +38,16 @@ def test_extract_waits_for_the_configured_delay(monkeypatch: pytest.MonkeyPatch)
 
     assert slept == [0.5]
     assert [page.text for page in extracted.pages] == ["notes.pdf page 1", "notes.pdf page 2"]
+
+
+def test_extract_fails_the_unreadable_fixture() -> None:
+    with pytest.raises(StepFailure) as caught:
+        asyncio.run(
+            extract_text(ExtractInput(filename="unreadable.pdf", page_count=1), delay_seconds=0)
+        )
+
+    assert caught.value.code == "unreadable_document"
+    assert caught.value.permanent is True
 
 
 def test_check_flags_the_injection_phrase() -> None:
@@ -84,6 +96,43 @@ def test_factory_rejects_an_unregistered_provider() -> None:
 
 def test_mock_pipeline_stores_the_summary_and_report(migrated_database_url: str) -> None:
     asyncio.run(_stores_results(migrated_database_url))
+
+
+def test_the_in_process_worker_reaches_succeeded(migrated_database_url: str) -> None:
+    asyncio.run(_worker_reaches_succeeded(migrated_database_url))
+
+
+async def _worker_reaches_succeeded(database_url: str) -> None:
+    engine = create_engine(database_url)
+    queue = build_queue(database_url, maintenance_cron="0 0 1 1 *")
+    repository = PostgresJobRepository(create_session_factory(engine), queue)
+    bind_jobs(repository)
+    bind_pipeline(DocumentPipeline(repository, MockLLM(), MockClassifier(), delay_seconds=0))
+    try:
+        await _clear(engine)
+        with _client(database_url) as client:
+            created = client.post(
+                "/jobs",
+                files=[("files", ("desk-note.pdf", _pdf(), "application/pdf"))],
+            )
+            job_id = created.json()["id"]
+            async with queue.open_async():
+                await queue.run_worker_async(
+                    wait=False,
+                    install_signal_handlers=False,
+                    listen_notify=False,
+                )
+            body = client.get(f"/jobs/{job_id}").json()
+        assert body["status"] == "succeeded"
+        assert body["progress"] == {"completed_steps": 3, "total_steps": 3}
+        assert body["documents"][0]["summary"]["summary"] == "Mock summary of desk-note.pdf."
+        assert body["report"]["summary"] == "Mock report of desk-note.pdf."
+        assert body["report"]["excluded_files"] == []
+    finally:
+        bind_pipeline(None)
+        bind_jobs(None)
+        await _clear(engine)
+        await engine.dispose()
 
 
 async def _stores_results(database_url: str) -> None:

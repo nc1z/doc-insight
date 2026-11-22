@@ -96,11 +96,11 @@ Allowed types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `buil
 
 The Bruno collection is in [`backend/bruno/`](backend/bruno/).
 
-1. Start the backend: `pnpm dev`.
+1. Start the stack: `docker compose up -d`. The happy-flow poll waits until the worker marks the job `succeeded`, so the API alone is not enough.
 2. In Bruno, choose **Open Collection** and select `backend/bruno/`.
 3. Select the `local` environment, which points to `http://localhost:8000`.
 
-To run the whole collection from the terminal instead, run `pnpm dlx @usebruno/cli run --env local` in `backend/bruno/`.
+To run the whole collection from the terminal, run `pnpm bruno`.
 
 Add a request for each new endpoint, with tests or assertions for the expected response.
 
@@ -109,7 +109,7 @@ Add a request for each new endpoint, with tests or assertions for the expected r
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on pushes to `main` and on pull requests:
 
 - `ci` job: actionlint, then `pnpm build`, `pnpm lint`, and `pnpm test`.
-- `docker` job: builds and starts both containers, then checks `/api/health` through nginx.
+- `docker` job: builds and starts the stack, checks `/api/health` through nginx, then runs the Bruno collection with `pnpm bruno`.
 
 To run the `ci` job locally before pushing, start Docker and run `pnpm ci:local`. It uses act with the runner image set in [`.actrc`](.actrc).
 

@@ -258,14 +258,16 @@ A transient step failure retries 3 times with exponential backoff and jitter. Af
 
 ### 3E. Tests and Manual Verification
 
-- [ ] Integration test: create a job, run the worker in-process, assert the job reaches `succeeded` with mock summaries and report.
+- [x] Integration test: create a job, run the worker in-process, assert the job reaches `succeeded` with mock summaries and report.
 - [x] Integration test: a forced step failure produces the decided failure behaviour.
-- [ ] Bruno: upload, then poll `GET /jobs/{id}` until `succeeded`.
-- [ ] Run the Bruno collection with the Bruno CLI in the CI `docker` job against the Compose stack in mock mode.
+- [x] Bruno: upload, then poll `GET /jobs/{id}` until `succeeded`. Happy flow uploads the two samples and polls for up to 30 seconds. Processing failure uploads `desk-note.pdf` with `unreadable.pdf`, which the mock extract rejects. It polls until the analyst is asked, retries, continues without the failed file, and polls until the report lists that file.
+- [x] Run the Bruno collection with the Bruno CLI in the CI `docker` job against the Compose stack in mock mode. `pnpm bruno` runs `@usebruno/cli` after the stack is healthy.
 
 ### 3F. Learning Checkpoint
 
-- [ ] Learning: explain the code changes in small chunks with file names, short snippets, layman explanations, and how the API and worker cooperate through Postgres alone.
+- [x] Learning: explain the code changes in small chunks with file names, short snippets, layman explanations, and how the API and worker cooperate through Postgres alone.
+
+The API writes the job and one queue row per document. The worker, a second process from the same image, claims those rows and runs extract, check, and summarise. A failed document keeps its error while the others continue. The analyst retries it or continues without it. Consolidation runs once every remaining document has succeeded. The two processes share Postgres and MinIO and do not call each other.
 
 Suggested commit message: `feat(backend): add worker and mocked processing pipeline`
 

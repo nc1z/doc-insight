@@ -1,0 +1,30 @@
+info:
+  name: Continue without the failed document
+  type: http
+  seq: 5
+
+http:
+  method: POST
+  url: "{{baseUrl}}/jobs/{{jobId}}/confirm"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test("excludes the failed document and starts the report", function () {
+          expect(res.body.status).to.equal("consolidating");
+          expect(res.body.documents.map((item) => item.filename)).to.eql(["desk-note.pdf"]);
+          expect(res.body.excluded_files.map((item) => item.filename)).to.eql(["unreadable.pdf"]);
+          expect(res.body.excluded_files[0].code).to.equal("unreadable_document");
+        });
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "202"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

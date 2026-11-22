@@ -12,6 +12,7 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "test:db": "docker compose up -d postgres-test --wait",
+    "bruno": "cd backend/bruno && bru run --env local",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "ci:local": "DOCKER_HOST=$(docker context inspect --format '{{.Endpoints.docker.Host}}') act -j ci --container-daemon-socket unix:///var/run/docker.sock",
@@ -33,6 +34,7 @@
   "devDependencies": {
     "@commitlint/cli": "21.2.4",
     "@commitlint/config-conventional": "21.2.4",
+    "@usebruno/cli": "4.3.0",
     "husky": "9.1.7",
     "lint-staged": "17.6.0",
     "prettier": "3.10.1",
