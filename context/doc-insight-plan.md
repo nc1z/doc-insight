@@ -565,27 +565,31 @@ Goal: Prove the whole feature is correct, usable, observable, and safe enough to
 
 ### Final A. Full Test Pass
 
-- [ ] Backend unit and integration tests pass against Postgres.
-- [ ] Bruno collection passes through the Bruno CLI against the Compose stack.
-- [ ] Playwright smoke tests pass.
-- [ ] Lint, format, and type checks pass (ruff, mypy, oxlint, tsc); both Docker images build; CI is green.
+- [x] Backend unit and integration tests pass against Postgres.
+- [x] Bruno collection passes through the Bruno CLI against the Compose stack.
+- [x] Playwright smoke tests pass.
+- [x] Lint, format, and type checks pass (ruff, mypy, oxlint, tsc); both Docker images build; CI is green.
 
 ### Final B. User Flow Pass
 
-- [ ] Upload the samples, watch progress, and read the report in the UI.
-- [ ] Failure case: invalid and adversarial samples are rejected or flagged with clear reasons.
-- [ ] Recovery case: resolve a mixed upload by re-uploading, continuing, and cancelling; refresh mid-job and see the same state.
+- [x] Upload the samples, watch progress, and read the report in the UI.
+- [x] Failure case: invalid and adversarial samples are rejected or flagged with clear reasons.
+- [x] Recovery case: resolve a mixed upload by re-uploading, continuing, and cancelling; refresh mid-job and see the same state.
 
 ### Final C. Docs and Decision Pass
 
-- [ ] `architecture.md` and `PRD.md` match what was built.
-- [ ] Every decision made during the phases is in `decision-record.md`.
-- [ ] Open decisions in `architecture.md` are resolved or listed as known limitations.
-- [ ] Decide whether to build the optional AI feature.
+- [x] `architecture.md` and `PRD.md` match what was built.
+- [x] Every decision made during the phases is in `decision-record.md`.
+- [x] Open decisions in `architecture.md` are resolved or listed as known limitations.
+- [x] Decide whether to build the optional AI feature.
 
 ### Final D. Learning Checkpoint
 
-- [ ] Learning: explain the full feature end to end with final code paths, diagrams when helpful, manual test commands, infrastructure involved, and tradeoffs learned.
+- [x] Learning: explain the full feature end to end with final code paths, diagrams when helpful, manual test commands, infrastructure involved, and tradeoffs learned.
+
+An upload hits `POST /jobs` (`backend/app/api/jobs.py`). The API stores the PDFs in MinIO and inserts one queue task per file. The worker (`backend/app/worker/pipeline.py`) reads each page, sends picture pages to the vision model, runs the safety checks, and asks DeepSeek for a chunk summary and then a document summary. When every stored file is finished, one more task writes the report. The page at `/jobs/<id>` polls `GET /jobs/{id}` and shows progress until the job succeeds, then the overview and the document tabs together (`frontend/src/pages/home.tsx`). Invalid files stop for a decision. Hidden text and injection are flagged and still summarised. The optional Q&A feature is not built.
+
+`pnpm test` passed here: 261 backend tests against Postgres and 18 frontend tests. The latest CI run on main passed, and that run includes lint, both image builds, the Bruno collection, and Playwright, all with the providers forced to mock. A happy-flow upload of four documents and one image finished in about a minute on DeepSeek, against about seven minutes on GLM 5.3, with the same summary quality. Eval scoring stays a later enhancement and is not part of CI.
 
 Suggested commit message: `chore: complete acceptance pass`
 

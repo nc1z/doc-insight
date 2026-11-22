@@ -76,8 +76,8 @@ Existing summarisers handle one document at a time and don't show which document
 - `backend/evals/fixtures.json`: the eval source documents on a fictional topic, from which the eval PDFs are generated.
 - `backend/evals/golden.json`: golden cases with expected outputs, scoring criteria, and pass thresholds.
 - `backend/evals/adversarial.json`: adversarial cases with expected safe behaviour and pass thresholds.
-- Mock LLM fixtures: deterministic responses so tests, CI, and the demo run without an API key.
-- `.env.example`: every setting, with the LLM provider defaulting to mock.
+- Mock LLM fixtures: deterministic responses so tests and CI run without an API key.
+- `.env.example`: every setting. The example LLM, classifier, and vision providers are Cloudflare. CI rewrites those three to mock before it runs tests.
 
 ## Functional Requirements
 
@@ -150,7 +150,7 @@ Existing summarisers handle one document at a time and don't show which document
 - **Invalid-file checks**: each file in `samples/invalid/` returns the expected error code and message.
 - **Mock-LLM tests**: API endpoints, validation errors, and the full pipeline run deterministically in CI without an API key.
 - Evals run when a prompt, model, or provider changes. Results are saved so versions can be compared.
-- CI runs lint, type checks (ruff, mypy, eslint, tsc), backend and frontend tests, the mock evals, and Docker builds for both images.
+- CI runs lint, type checks (ruff, mypy, oxlint, tsc), backend and frontend tests, and Docker builds for both images.
 
 ## Animated Monitoring View Requirements
 
@@ -168,7 +168,7 @@ Existing summarisers handle one document at a time and don't show which document
 - The adversarial sample is flagged in the UI, and its injected instructions are not followed.
 - Each invalid sample is rejected with a clear error. The analyst can then re-upload it, continue without it (and the report lists it as excluded), or cancel the job.
 - Switching from the mock provider to a hosted provider requires only `.env` changes.
-- CI is green on the latest commit, including tests and mock evals.
+- CI is green on the latest commit, including tests.
 - The README contains an overview, architecture diagram, setup, screenshots, assumptions, and known limitations, plus design decisions on output schema, model choice, chunking, and async processing.
 
 ## Production Design

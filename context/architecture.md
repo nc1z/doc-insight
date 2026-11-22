@@ -312,9 +312,7 @@ stateDiagram-v2
 | `succeeded`                          | Transition into the report                                              |
 | `failed`, `cancelled`, `expired`     | Message with the reason, and a link back to upload                      |
 
-### Status open decisions
-
-- **Showing results early**: fill in document tabs during progress as each document finishes, or reveal the whole report at the end. The response supports both.
+While a job runs, each file shows its state. The overview and the document tabs appear together when the job succeeds.
 
 ## LLM processing pipeline
 
@@ -475,7 +473,7 @@ flowchart LR
   - **Overview**: a large one-line headline, five numbered points, then "Further reading" with a heading per topic and short paragraphs, with pull quotes between them. Where documents disagree, both claims sit under the topic as indented quotes with the file and page. Then theme tags, and last a plain bullet list of metadata: documents, people, organisations, locations, dates, flagged files, and files left out.
   - **One tab per document**: a one-line headline, three points, reading with pull quotes, topic tags, and metadata bullets. The metadata has no cards or tables.
 - The UI draws the report from structured fields, not markdown. A report saved before the structured fields shows through a fallback that splits its long summary into a headline and short paragraphs.
-- A Download PDF button above the tabs saves the report as a PDF with one page for the overview and one page for each document, in tab order. The API draws it (`GET /jobs/{id}/report.pdf`) from the stored results with PyMuPDF, which the pipeline already uses. A page whose content runs long is scaled down so the page count stays at one per tab. The endpoint answers `409` until the job has succeeded.
+- A Download PDF button above the tabs saves the report as a PDF with one page for the overview and one page for each document, in tab order. The API draws it (`GET /jobs/{id}/report.pdf`) from the stored results with PyMuPDF, which the pipeline already uses. A page whose content runs long is scaled down so the page count stays at one per tab. The endpoint answers `409` until the job has succeeded. Markdown, if wanted later, would be another renderer beside the PDF one in `backend/app/export/`.
 
 ### One page
 
@@ -485,10 +483,6 @@ flowchart LR
 
 - There is no authentication and no endpoint that lists jobs (see the PRD assumptions). The browser keeps the IDs of jobs it created in local storage and fetches each one by ID.
 - Analysts only see their own past jobs on that browser. Jobs that have expired or been deleted are dropped from the list.
-
-### UI open decisions
-
-- **Download format**: PDF only. Markdown, if wanted, is another renderer beside the PDF one in `backend/app/export/`.
 
 ## Enhancements
 
