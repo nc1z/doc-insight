@@ -7,10 +7,12 @@ from app.pipeline.datamark import datamark, datamark_values
 from app.pipeline.extract import extract_pdf_pages
 from app.pipeline.models import (
     CheckResult,
+    ChunkSummary,
     ConsolidatedReport,
     DocumentSummary,
     ExtractedText,
     ExtractInput,
+    PageChunk,
 )
 from app.pipeline.prompts import SystemPromptCatalog
 
@@ -73,17 +75,35 @@ async def summarise_document(
     check: CheckResult,
     llm: LLMProvider,
     prompts: SystemPromptCatalog,
+    chunks: Sequence[PageChunk],
     *,
     delay_seconds: float,
 ) -> DocumentSummary:
     await asyncio.sleep(delay_seconds)
+    outputs: list[ChunkSummary] = []
+    for chunk in chunks:
+        if not chunk.text.strip():
+            continue
+        outputs.append(
+            await llm.complete(
+                render_chunk_prompt(
+                    prompts,
+                    filename=document.filename,
+                    page=chunk.page,
+                    text=chunk.text,
+                ),
+                ChunkSummary,
+            )
+        )
     request = prompts.get("document_combine").for_call(
         {
             "filename": document.filename,
             "document_type": check.document_type,
             "flagged": "true" if check.flagged else "false",
-            "chunk_outputs": "[]",
-            "excerpts": _excerpts(text),
+            "chunk_outputs": json.dumps(
+                [datamark_values(item.model_dump(mode="json")) for item in outputs]
+            ),
+            "excerpts": _excerpts(text, chunks),
         }
     )
     return await llm.complete(request, DocumentSummary)
@@ -110,10 +130,13 @@ async def consolidate_summaries(
     return await llm.complete(request, ConsolidatedReport)
 
 
-def _excerpts(text: ExtractedText) -> str:
+def _excerpts(text: ExtractedText, chunks: Sequence[PageChunk]) -> str:
+    sources = [(chunk.page, chunk.text) for chunk in chunks if chunk.text.strip()]
+    if not sources:
+        sources = [(page.page, page.text) for page in text.pages if page.text.strip()]
     lines: list[str] = []
-    for page in text.pages:
-        marked = datamark(page.text)
+    for page, body in sources:
+        marked = datamark(body)
         if marked:
-            lines.append(f"page {page.page}: {marked}")
+            lines.append(f"page {page}: {marked}")
     return "\n".join(lines)

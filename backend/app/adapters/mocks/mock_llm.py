@@ -20,6 +20,27 @@ class MockLLM:
     async def complete(self, request: LLMRequest, output_type: type[SummaryT]) -> SummaryT:
         llm_call_key("mock", request.prompt_id, request.prompt_version)
         fields = _fields(request.user)
+        if request.prompt_id == "chunk_output":
+            filename = fields["filename"]
+            page = int(fields.get("page", "1"))
+            return output_type.model_validate(
+                {
+                    "topics": ["mock"],
+                    "entities": {
+                        "people": [],
+                        "organisations": [],
+                        "locations": [],
+                        "dates": [],
+                    },
+                    "notable_points": [
+                        {
+                            "text": "Mock point",
+                            "page": page,
+                            "quote": f"{filename} page {page}",
+                        }
+                    ],
+                }
+            )
         if request.prompt_id == "document_combine":
             filename = fields["filename"]
             return output_type.model_validate(

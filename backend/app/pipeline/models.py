@@ -65,6 +65,12 @@ class Entities(BaseModel):
     dates: list[Entity] = Field(default_factory=list)
 
 
+class ChunkSummary(BaseModel):
+    topics: list[_Text]
+    entities: Entities = Field(default_factory=Entities)
+    notable_points: list[NotablePoint]
+
+
 class DocumentSummary(BaseModel):
     title: _Text
     inferred_type: DocumentType

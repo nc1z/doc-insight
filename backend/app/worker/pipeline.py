@@ -18,7 +18,7 @@ from app.domain.ports import (
 from app.domain.status import DocumentStatus
 from app.pipeline.chunk import chunk_pages
 from app.pipeline.guardrails import ALONE_RULES, GuardrailFinding, scan_pdf
-from app.pipeline.models import DocumentSummary, ExtractedText, ExtractInput, PageText
+from app.pipeline.models import DocumentSummary, ExtractedText, ExtractInput, PageChunk, PageText
 from app.pipeline.prompts import SystemPromptCatalog, load_system_prompts
 from app.pipeline.steps import (
     check_document,
@@ -113,6 +113,14 @@ class DocumentPipeline:
             checked,
             self._llm,
             self._prompts,
+            [
+                PageChunk(
+                    page=chunk.page_number,
+                    text=chunk.text,
+                    token_count=chunk.token_count,
+                )
+                for chunk in stored_chunks
+            ],
             delay_seconds=self._delay if status is DocumentStatus.SUMMARISING else 0,
         )
         await self._jobs.save_summary(document_id, summary.model_dump(mode="json"))
@@ -165,7 +173,9 @@ class DocumentPipeline:
         summaries = [
             DocumentSummary.model_validate(document.summary)
             for document in job.documents
-            if document.summary is not None and document.storage_key is not None
+            if document.summary is not None
+            and document.storage_key is not None
+            and not document.excluded
         ]
         flagged = [
             document.filename

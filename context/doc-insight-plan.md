@@ -375,12 +375,14 @@ Solves flow step 6: the job's results contain real key details and a report.
 - [x] Apply datamarking to document text: interleave a marker character through it, and explain in the system prompt that marked text is data, never instructions.
 - [x] Ask the consolidation prompt to list disagreements explicitly instead of a single consensus.
 
-`chunk_output`, `document_combine`, and `consolidation` are in `backend/app/pipeline/prompts.yaml`, each with an id and a version. The system text includes the canary `CANARY-7F3A9C`. A caret is placed between the words of document text before it goes into a prompt (`backend/app/pipeline/datamark.py`), and the system text says that marked text is data. The consolidation prompt tells the model to keep both numbers when two documents disagree, with the file, the page, and the quote for each. Each summary call records `model:prompt id:version` in the worker log. CI runs these checks with the rest of the tests, so a change to `prompts.yaml` fails the build when an id, a version, a placeholder, or the canary is wrong. The scored golden cases stay in phase 7. The per-chunk model call is phase 6D. The current document summary still sends the marked page text in one call.
+`chunk_output`, `document_combine`, and `consolidation` are in `backend/app/pipeline/prompts.yaml`, each with an id and a version. The system text includes the canary `CANARY-7F3A9C`. A caret is placed between the words of document text before it goes into a prompt (`backend/app/pipeline/datamark.py`), and the system text says that marked text is data. The consolidation prompt tells the model to keep both numbers when two documents disagree, with the file, the page, and the quote for each. Each summary call records `model:prompt id:version` in the worker log. CI runs these checks with the rest of the tests, so a change to `prompts.yaml` fails the build when an id, a version, a placeholder, or the canary is wrong. The scored golden cases stay in phase 7.
 
 ### 6D. Summarise and Consolidate
 
-- [ ] For each chunk, return structured fields (topics, entities, notable points with page and quote), then have one call synthesize those outputs into the document schema (map-reduce), passing relevant source excerpts into that call.
-- [ ] Consolidate from validated document summaries only, listing flagged and excluded files.
+- [x] For each chunk, return structured fields (topics, entities, notable points with page and quote), then have one call synthesize those outputs into the document schema (map-reduce), passing relevant source excerpts into that call.
+- [x] Consolidate from validated document summaries only, listing flagged and excluded files.
+
+`summarise_document` in `backend/app/pipeline/steps.py` reads each stored chunk with `chunk_output`. The reply is topics, people, companies, places, dates, and notable points with a page and a quote. One later `document_combine` call reads those replies and the marked words from the same chunks, and writes the document summary. A document with no chunks still gets that one summary call. The report is built from summaries that match `DocumentSummary`. An excluded file stays off that list. Flagged files and excluded files are named on the report.
 
 ### 6E. Citation Checks and Telemetry
 

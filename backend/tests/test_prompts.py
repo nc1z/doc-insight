@@ -5,10 +5,18 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+from app.adapters.mocks.mock_llm import MockLLM
 from app.core.config import Settings
 from app.domain.ports import LLMRequest
 from app.main import create_app
-from app.pipeline.models import CheckResult, DocumentSummary, ExtractedText, ExtractInput, PageText
+from app.pipeline.models import (
+    CheckResult,
+    DocumentSummary,
+    ExtractedText,
+    ExtractInput,
+    PageChunk,
+    PageText,
+)
 from app.pipeline.prompts import CANARY, load_system_prompts
 from app.pipeline.steps import consolidate_summaries, render_chunk_prompt, summarise_document
 
@@ -118,21 +126,14 @@ def test_document_text_is_marked_before_the_model_reads_it() -> None:
     seen: list[LLMRequest] = []
 
     class _Recording:
+        def __init__(self) -> None:
+            self._mock = MockLLM()
+
         async def complete(
             self, request: LLMRequest, output_type: type[DocumentSummary]
         ) -> DocumentSummary:
             seen.append(request)
-            return output_type.model_validate(
-                {
-                    "title": "desk-note.pdf",
-                    "inferred_type": "letter",
-                    "summary": "Mock summary of desk-note.pdf.",
-                    "topics": ["mock"],
-                    "notable_points": [
-                        {"text": "Mock point", "page": 1, "quote": "desk-note.pdf page 1"}
-                    ],
-                }
-            )
+            return await self._mock.complete(request, output_type)
 
     summary = asyncio.run(
         summarise_document(
@@ -141,15 +142,20 @@ def test_document_text_is_marked_before_the_model_reads_it() -> None:
             CheckResult(flagged=False, label="benign", score=0.1, document_type="letter"),
             _Recording(),
             catalog,
+            [PageChunk(page=1, text="The cost is $420 million today", token_count=6)],
             delay_seconds=0,
         )
     )
 
     assert summary.summary == "Mock summary of desk-note.pdf."
-    assert seen[0].prompt_id == "document_combine"
+    assert [request.prompt_id for request in seen] == ["chunk_output", "document_combine"]
     assert seen[0].prompt_version == 1
     assert "The^cost^is^$420^million^today" in seen[0].user
+    assert seen[1].prompt_version == 1
+    assert "The^cost^is^$420^million^today" in seen[1].user
+    assert '"topics": ["mock"]' in seen[1].user
     assert CANARY in seen[0].system
+    assert CANARY in seen[1].system
 
 
 def test_consolidation_marks_summary_text_and_names_the_prompt() -> None:
@@ -187,8 +193,8 @@ def test_consolidation_marks_summary_text_and_names_the_prompt() -> None:
                     }
                 )
             ],
-            flagged_documents=[],
-            excluded_files=[],
+            flagged_documents=["hidden-note.pdf"],
+            excluded_files=["bad.pdf"],
             llm=_Recording(),
             prompts=catalog,
             delay_seconds=0,
@@ -198,6 +204,8 @@ def test_consolidation_marks_summary_text_and_names_the_prompt() -> None:
     assert seen[0].prompt_id == "consolidation"
     assert seen[0].prompt_version == 1
     assert "The^cost^is^$420^million" in seen[0].user
+    assert "hidden-note.pdf" in seen[0].user
+    assert "bad.pdf" in seen[0].user
     assert "disagree" in seen[0].system
 
 
