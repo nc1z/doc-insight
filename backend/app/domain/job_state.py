@@ -6,12 +6,15 @@ _TRANSITIONS: dict[JobStatus, frozenset[JobStatus]] = {
         {
             JobStatus.AWAITING_INPUT,
             JobStatus.QUEUED,
+            JobStatus.CONSOLIDATING,
             JobStatus.CANCELLED,
             JobStatus.EXPIRED,
         }
     ),
     JobStatus.QUEUED: frozenset({JobStatus.RUNNING}),
-    JobStatus.RUNNING: frozenset({JobStatus.CONSOLIDATING, JobStatus.FAILED}),
+    JobStatus.RUNNING: frozenset(
+        {JobStatus.CONSOLIDATING, JobStatus.AWAITING_INPUT, JobStatus.CANCELLED, JobStatus.FAILED}
+    ),
     JobStatus.CONSOLIDATING: frozenset({JobStatus.SUCCEEDED, JobStatus.FAILED}),
     JobStatus.SUCCEEDED: frozenset(),
     JobStatus.FAILED: frozenset(),

@@ -35,11 +35,18 @@ _MESSAGES = {
 }
 
 
+_PROCESSING_MESSAGES = {
+    "step_timeout": "The step timed out.",
+    "step_failed": "The step failed.",
+    "unreadable_document": "The document could not be read.",
+}
+
+
 def message_for(code: str) -> str:
     try:
         return _MESSAGES[FileErrorCode(code)]
     except ValueError:
-        return code
+        return _PROCESSING_MESSAGES.get(code, code)
 
 
 @dataclass(frozen=True)

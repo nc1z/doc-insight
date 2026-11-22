@@ -7,6 +7,7 @@ from app.domain.ports import JobRepository
 from app.worker.processing import run_consolidation, run_document
 
 _jobs: JobRepository | None = None
+_step_timeout = 60.0
 
 
 def bind_jobs(repository: JobRepository | None) -> None:
@@ -14,10 +15,15 @@ def bind_jobs(repository: JobRepository | None) -> None:
     _jobs = repository
 
 
+def bind_step_timeout(seconds: float) -> None:
+    global _step_timeout
+    _step_timeout = seconds
+
+
 def register_processing(application: App) -> None:
     @application.task(name=PROCESS_DOCUMENT)
     async def process_document(document_id: str) -> None:
-        await run_document(_require(), UUID(document_id))
+        await run_document(_require(), UUID(document_id), step_timeout=_step_timeout)
 
     @application.task(name=CONSOLIDATE_JOB)
     async def consolidate_job(job_id: str) -> None:

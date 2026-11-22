@@ -8,7 +8,7 @@ from app.core.db import create_engine, create_session_factory
 from app.core.logging import configure_logging
 from app.worker.pipeline import DocumentPipeline
 from app.worker.processing import bind_pipeline
-from app.worker.tasks import bind_jobs
+from app.worker.tasks import bind_jobs, bind_step_timeout
 
 
 def main() -> None:
@@ -19,6 +19,7 @@ def main() -> None:
     repository = PostgresJobRepository(create_session_factory(engine), queue)
     delay = settings.mock_step_delay_seconds if settings.llm_provider == "mock" else 0
     bind_jobs(repository)
+    bind_step_timeout(settings.step_timeout_seconds)
     bind_pipeline(
         DocumentPipeline(
             repository,
@@ -31,5 +32,6 @@ def main() -> None:
         queue.run_worker()
     finally:
         bind_pipeline(None)
+        bind_step_timeout(60)
         bind_jobs(None)
         asyncio.run(engine.dispose())

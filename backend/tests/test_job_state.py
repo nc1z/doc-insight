@@ -7,10 +7,13 @@ from app.domain.status import JobStatus
 _ALLOWED = {
     (JobStatus.AWAITING_INPUT, JobStatus.AWAITING_INPUT),
     (JobStatus.AWAITING_INPUT, JobStatus.QUEUED),
+    (JobStatus.AWAITING_INPUT, JobStatus.CONSOLIDATING),
     (JobStatus.AWAITING_INPUT, JobStatus.CANCELLED),
     (JobStatus.AWAITING_INPUT, JobStatus.EXPIRED),
     (JobStatus.QUEUED, JobStatus.RUNNING),
     (JobStatus.RUNNING, JobStatus.CONSOLIDATING),
+    (JobStatus.RUNNING, JobStatus.AWAITING_INPUT),
+    (JobStatus.RUNNING, JobStatus.CANCELLED),
     (JobStatus.RUNNING, JobStatus.FAILED),
     (JobStatus.CONSOLIDATING, JobStatus.SUCCEEDED),
     (JobStatus.CONSOLIDATING, JobStatus.FAILED),

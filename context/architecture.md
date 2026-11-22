@@ -211,7 +211,7 @@ stateDiagram-v2
 ### Notes
 
 - **The API coordinates every step.** Each adapter does one thing and never calls another adapter.
-- **State changes use action endpoints**: `POST /jobs/{id}/confirm` and `POST /jobs/{id}/cancel`. Confirm means the analyst accepts the final set of files and processing can start. Each action is explicit, and the server rejects actions that are invalid for the job's current state with `409 Conflict`. Cancel is a `POST`, not a `DELETE`, because the job record stays with status `cancelled`.
+- **State changes use action endpoints**: `POST /jobs/{id}/confirm`, `POST /jobs/{id}/retry`, and `POST /jobs/{id}/cancel`. Confirm accepts the final set of files, or continues without a document that failed during processing. Retry requeues that failed document. Each action is explicit, and the server rejects actions that are invalid for the job's current state with `409 Conflict`. Cancel is a `POST`, not a `DELETE`, because the job record stays with status `cancelled`.
 - **Postgres is the job store and the queue.** Procrastinate inserts each queue row on the same connection as the job row, so they commit together and a crash cannot leave a queued job with no document task. This removes the need for an outbox or sweeper. Workers claim ready tasks with `SELECT … FOR UPDATE SKIP LOCKED` and must still be idempotent, because a task can be retried after a worker crash.
 - **One operation for create and enqueue.** Creating a queued job and inserting one queue row per stored document is a single operation. The Postgres adapter does it in one transaction; another queue provider would need an outbox behind the same interface.
 - **The queue carries ids, not file bytes.** A document task carries the document id. The consolidation task carries the job id. The worker loads the job and reads the file from storage by its storage key.
@@ -283,12 +283,14 @@ sequenceDiagram
 stateDiagram-v2
     [*] --> awaiting_input: some files rejected
     [*] --> queued: all files valid
-    awaiting_input --> queued: confirm
+    awaiting_input --> queued: confirm, or retry a failed document
+    awaiting_input --> consolidating: continue without a failed document
     awaiting_input --> cancelled: cancel
     awaiting_input --> expired: timeout
     queued --> running: first document starts
     running --> consolidating: every stored document succeeded
     running --> awaiting_input: a document failed and the others have finished
+    running --> cancelled: cancel
     consolidating --> succeeded
 ```
 
@@ -301,12 +303,12 @@ stateDiagram-v2
 
 ### What the UI shows
 
-| Job status                           | Screen                                             |
-| ------------------------------------ | -------------------------------------------------- |
-| `awaiting_input`                     | Rejected files with the three choices              |
-| `queued`, `running`, `consolidating` | Progress bar, document states, and flags           |
-| `succeeded`                          | Transition into the report                         |
-| `failed`, `cancelled`, `expired`     | Message with the reason, and a link back to upload |
+| Job status                           | Screen                                                                  |
+| ------------------------------------ | ----------------------------------------------------------------------- |
+| `awaiting_input`                     | Rejected files, or a failed document, with retry, continue, or cancel   |
+| `queued`, `running`, `consolidating` | Progress. A failed document shows its error while the others keep going |
+| `succeeded`                          | Transition into the report                                              |
+| `failed`, `cancelled`, `expired`     | Message with the reason, and a link back to upload                      |
 
 ### Status open decisions
 
@@ -486,7 +488,7 @@ Good to have for scaling the system.
 
 ### Retries
 
-- **Exponential backoff with jitter** on transient failures: timeouts, rate limits (`429`), and provider `5xx` errors. Jitter spreads retries out so workers do not all retry at the same moment.
+- **Exponential backoff with jitter** on transient failures: timeouts, rate limits (`429`), and provider `5xx` errors. Each step is limited by `STEP_TIMEOUT_SECONDS`. Jitter spreads retries out so workers do not all retry at the same moment.
 - Honour the provider's `Retry-After` header when it is present.
 - **Do not retry permanent failures**, such as a corrupt file or a request the provider rejects as invalid. Invalid LLM output has its own capped schema retry.
 - **Cap the attempts at 3**, then mark that document as failed with a clear reason. The other documents keep processing. The analyst retries the failed document, continues without it, or cancels. In production, failed messages move to the dead-letter queue.

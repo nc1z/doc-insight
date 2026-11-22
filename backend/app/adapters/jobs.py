@@ -97,15 +97,60 @@ class PostgresJobRepository:
             job = await self._locked(session, job_id)
             if job is None:
                 return None
-            job.status = transition(job.status, JobStatus.QUEUED)
-            stored = [document for document in job.documents if document.storage_key is not None]
-            if not stored:
-                raise DomainError(422, "validation_error", "The job has no documents to process.")
+            if job.status not in (JobStatus.AWAITING_INPUT, JobStatus.RUNNING):
+                transition(job.status, JobStatus.AWAITING_INPUT)
             for document in job.documents:
-                if document.storage_key is None and not document.excluded:
+                rejected = document.storage_key is None or document.status is DocumentStatus.FAILED
+                if rejected and not document.excluded:
                     document.excluded = True
+            remaining = [
+                document
+                for document in job.documents
+                if document.storage_key is not None and not document.excluded
+            ]
+            if not remaining:
+                raise DomainError(422, "validation_error", "The job has no documents to process.")
+            connection = await _driver_connection(session)
+            pending = [
+                document for document in remaining if document.status is DocumentStatus.PENDING
+            ]
+            if job.status is JobStatus.AWAITING_INPUT and pending:
+                job.status = transition(job.status, JobStatus.QUEUED)
+                await session.flush()
+                await self._enqueue_documents(connection, pending)
+            elif _unfinished_stored(job) == 0:
+                job.status = transition(job.status, JobStatus.CONSOLIDATING)
+                await self._enqueue_consolidation(connection, job.id)
             await session.flush()
-            await self._enqueue_documents(await _driver_connection(session), job.documents)
+        return job
+
+    async def retry(self, job_id: UUID) -> Job | None:
+        async with self._sessions() as session, session.begin():
+            job = await self._locked(session, job_id)
+            if job is None:
+                return None
+            if job.status not in (JobStatus.AWAITING_INPUT, JobStatus.RUNNING):
+                transition(job.status, JobStatus.AWAITING_INPUT)
+            failed = [
+                document
+                for document in job.documents
+                if document.storage_key is not None
+                and not document.excluded
+                and document.status is DocumentStatus.FAILED
+            ]
+            if not failed:
+                raise DomainError(
+                    422,
+                    "validation_error",
+                    "The job has no failed documents to retry.",
+                )
+            for document in failed:
+                document.status = DocumentStatus.PENDING
+                document.rejection_reason = None
+            if job.status is JobStatus.AWAITING_INPUT:
+                job.status = transition(job.status, JobStatus.QUEUED)
+            await session.flush()
+            await self._enqueue_documents(await _driver_connection(session), failed)
         return job
 
     async def cancel(self, job_id: UUID) -> Job | None:
@@ -172,10 +217,26 @@ class PostgresJobRepository:
             if job.status is JobStatus.QUEUED:
                 job.status = transition(job.status, JobStatus.RUNNING)
             document.status = target
-            if target is DocumentStatus.SUCCEEDED and _unfinished_stored(job) == 0:
-                job.status = transition(job.status, JobStatus.CONSOLIDATING)
-                await self._enqueue_consolidation(await _driver_connection(session), job.id)
+            if target is DocumentStatus.SUCCEEDED:
+                await self._finish_if_idle(session, job)
             return True
+
+    async def fail_document(self, document_id: UUID, code: str) -> None:
+        async with self._sessions() as session, session.begin():
+            located = await session.get(Document, document_id)
+            if located is None:
+                return
+            job = await self._locked(session, located.job_id)
+            if job is None or job.status not in (JobStatus.QUEUED, JobStatus.RUNNING):
+                return
+            document = next(item for item in job.documents if item.id == document_id)
+            if document.excluded or document.storage_key is None or document.status in _TERMINAL:
+                return
+            if job.status is JobStatus.QUEUED:
+                job.status = transition(job.status, JobStatus.RUNNING)
+            document.status = DocumentStatus.FAILED
+            document.rejection_reason = code
+            await self._finish_if_idle(session, job)
 
     async def save_flag(self, document_id: UUID, flagged: bool) -> None:
         async with self._sessions() as session, session.begin():
@@ -216,6 +277,15 @@ class PostgresJobRepository:
             with_for_update=True,
         )
 
+    async def _finish_if_idle(self, session: AsyncSession, job: Job) -> None:
+        if job.status is not JobStatus.RUNNING or _unfinished_stored(job) > 0:
+            return
+        if _failed_open(job):
+            job.status = transition(job.status, JobStatus.AWAITING_INPUT)
+            return
+        job.status = transition(job.status, JobStatus.CONSOLIDATING)
+        await self._enqueue_consolidation(await _driver_connection(session), job.id)
+
     async def _enqueue_documents(
         self,
         connection: psycopg.AsyncConnection,
@@ -236,6 +306,9 @@ class PostgresJobRepository:
         await task.configure(connection=connection).defer_async(job_id=str(job_id))
 
 
+_TERMINAL = frozenset({DocumentStatus.SUCCEEDED, DocumentStatus.FAILED})
+
+
 def _unfinished_stored(job: Job) -> int:
     return sum(
         1
@@ -243,6 +316,15 @@ def _unfinished_stored(job: Job) -> int:
         if document.storage_key is not None
         and not document.excluded
         and document.status not in (DocumentStatus.SUCCEEDED, DocumentStatus.FAILED)
+    )
+
+
+def _failed_open(job: Job) -> bool:
+    return any(
+        document.storage_key is not None
+        and not document.excluded
+        and document.status is DocumentStatus.FAILED
+        for document in job.documents
     )
 
 

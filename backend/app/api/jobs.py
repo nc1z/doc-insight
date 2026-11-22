@@ -147,6 +147,26 @@ async def confirm_job(
 
 
 @router.post(
+    "/jobs/{id}/retry",
+    response_model=JobView,
+    status_code=202,
+    responses={
+        404: {"model": ErrorBody},
+        409: {"model": ErrorBody},
+        422: {"model": ErrorBody},
+    },
+)
+async def retry_job(
+    id: UUID,
+    jobs: Annotated[JobRepository, Depends(get_job_repository)],
+) -> JobView:
+    job = await jobs.retry(id)
+    if job is None:
+        raise DomainError(404, "not_found", "The job was not found.")
+    return _job_view(job)
+
+
+@router.post(
     "/jobs/{id}/cancel",
     response_model=JobView,
     responses={404: {"model": ErrorBody}, 409: {"model": ErrorBody}},
