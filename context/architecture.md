@@ -278,6 +278,7 @@ sequenceDiagram
 ```
 
 - `summary` is filled in for each document as it finishes, and `report` once consolidation is done.
+- **Progress counts finished pipeline steps.** Each stored document has extract, check, and summarise. `total_steps` is three per stored document. A step counts once the document status has moved past it.
 - `error` uses the same error schema as the rest of the API.
 
 ### Job states

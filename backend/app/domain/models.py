@@ -1,9 +1,11 @@
 import uuid
 from datetime import datetime
 from enum import StrEnum
+from typing import Any
 from uuid import uuid4
 
 from sqlalchemy import DateTime, Enum, ForeignKey, String, Text, false, func
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from app.domain.status import DocumentStatus, JobStatus
@@ -36,6 +38,7 @@ class Job(Base):
         server_default=func.now(),
         onupdate=func.now(),
     )
+    report: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
 
     documents: Mapped[list[Document]] = relationship(
         back_populates="job",
@@ -62,6 +65,7 @@ class Document(Base):
     rejection_reason: Mapped[str | None] = mapped_column(Text)
     excluded: Mapped[bool] = mapped_column(server_default=false(), default=False)
     flagged: Mapped[bool] = mapped_column(server_default=false(), default=False)
+    summary: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

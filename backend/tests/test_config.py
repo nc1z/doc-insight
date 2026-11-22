@@ -20,6 +20,7 @@ _ENV_KEYS = (
     "AWAITING_INPUT_TIMEOUT_SECONDS",
     "ORPHAN_MAX_AGE_SECONDS",
     "MAINTENANCE_CRON",
+    "MOCK_STEP_DELAY_SECONDS",
     "LLM_PROVIDER",
     "LLM_MODEL",
     "LLM_BASE_URL",
@@ -50,6 +51,7 @@ def test_mock_defaults_need_no_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.awaiting_input_timeout_seconds == 24 * 60 * 60
     assert settings.orphan_max_age_seconds == 60 * 60
     assert settings.maintenance_cron == "*/15 * * * *"
+    assert settings.mock_step_delay_seconds == 1
     assert settings.queue_provider == "procrastinate"
     assert settings.storage_provider == "s3"
     assert settings.s3_endpoint == "http://localhost:9000"

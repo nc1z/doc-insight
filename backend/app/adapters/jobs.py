@@ -1,5 +1,6 @@
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
 import psycopg
@@ -148,6 +149,8 @@ class PostgresJobRepository:
                 job_status=job.status,
                 excluded=document.excluded,
                 stored=document.storage_key is not None,
+                filename=document.filename,
+                page_count=document.page_count,
             )
 
     async def complete_step(
@@ -174,11 +177,27 @@ class PostgresJobRepository:
                 await self._enqueue_consolidation(await _driver_connection(session), job.id)
             return True
 
-    async def consolidate(self, job_id: UUID) -> bool:
+    async def save_flag(self, document_id: UUID, flagged: bool) -> None:
+        async with self._sessions() as session, session.begin():
+            document = await session.get(Document, document_id)
+            if document is None:
+                return
+            document.flagged = flagged
+
+    async def save_summary(self, document_id: UUID, summary: Mapping[str, Any]) -> None:
+        async with self._sessions() as session, session.begin():
+            document = await session.get(Document, document_id)
+            if document is None:
+                return
+            document.summary = dict(summary)
+
+    async def consolidate(self, job_id: UUID, report: Mapping[str, Any] | None = None) -> bool:
         async with self._sessions() as session, session.begin():
             job = await self._locked(session, job_id)
             if job is None or job.status is not JobStatus.CONSOLIDATING:
                 return False
+            if report is not None:
+                job.report = dict(report)
             job.status = transition(job.status, JobStatus.SUCCEEDED)
             return True
 

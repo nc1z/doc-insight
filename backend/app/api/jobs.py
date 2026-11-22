@@ -35,7 +35,15 @@ from app.schemas.jobs import (
 )
 
 router = APIRouter()
-_FINISHED = {DocumentStatus.SUCCEEDED, DocumentStatus.FAILED}
+_STEPS_PER_DOCUMENT = 3
+_COMPLETED_STEPS = {
+    DocumentStatus.PENDING: 0,
+    DocumentStatus.EXTRACTING: 0,
+    DocumentStatus.CHECKING: 1,
+    DocumentStatus.SUMMARISING: 2,
+    DocumentStatus.SUCCEEDED: _STEPS_PER_DOCUMENT,
+    DocumentStatus.FAILED: _STEPS_PER_DOCUMENT,
+}
 
 
 @router.get(
@@ -213,16 +221,18 @@ def _job_view(job: Job) -> JobView:
             rejected.append(_job_file(document))
         else:
             documents.append(_job_document(document))
-            if document.status in _FINISHED:
-                completed += 1
+            completed += _COMPLETED_STEPS[document.status]
     return JobView(
         id=job.id,
         status=job.status.value,
-        progress=JobProgress(completed_steps=completed, total_steps=len(documents)),
+        progress=JobProgress(
+            completed_steps=completed,
+            total_steps=_STEPS_PER_DOCUMENT * len(documents),
+        ),
         documents=documents,
         rejected_files=rejected,
         excluded_files=excluded,
-        report=None,
+        report=job.report,
         error=None,
     )
 
@@ -240,7 +250,7 @@ def _job_document(document: Document) -> JobDocument:
         status=document.status.value,
         flagged=document.flagged,
         error=error,
-        summary=None,
+        summary=document.summary,
     )
 
 

@@ -36,6 +36,7 @@ These are my decision records and thought process throughout planning & developm
 - `2026-11-22 10:58` **Waiting jobs expire after 24 hours**: an analyst can leave a mixed upload and finish it the same day. After 24 hours with no decision the job expires and its files are deleted. A stored file with no job is deleted after 1 hour, long enough that an upload still being saved is kept.
 - `2026-11-22 11:17` **One queue task per document, then one consolidation task** (`context/architecture.md`): document work can run on many workers, and a failed document retries by itself. The queue carries ids only. The document task that finds every stored document finished, while holding the job row lock, inserts the consolidation task in that same transaction. This replaces the single job-id queue payload.
 - `2026-11-22 11:32` **Worker in its own container** (`context/architecture.md`): processing capacity stays off the API, so a long job does not occupy the process that serves uploads and polls, and more workers can be added without more API containers. Both containers use the same image. The worker command is `python -m app.worker`. They meet only through Postgres and MinIO.
+- `2026-11-22 11:50` **Scripted pipeline for this POC** (`backend/app/pipeline/`): Step Functions, Airflow, or another workflow engine fits a production ETL pipeline of this shape, and that machinery is larger than this assignment. The POC keeps the steps in code, in a fixed order, run by the worker.
 
 ## Re-design based on Industry Practices
 

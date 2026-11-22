@@ -112,7 +112,10 @@ class S3FileStorage:
         found: list[StoredObject] = []
         token: str | None = None
         while True:
-            page = self._client.list_objects_v2(Bucket=self.bucket, ContinuationToken=token)
+            if token is None:
+                page = self._client.list_objects_v2(Bucket=self.bucket)
+            else:
+                page = self._client.list_objects_v2(Bucket=self.bucket, ContinuationToken=token)
             for item in page.get("Contents", []):
                 modified = item["LastModified"]
                 if isinstance(modified, datetime):

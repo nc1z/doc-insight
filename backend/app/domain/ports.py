@@ -1,7 +1,7 @@
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Protocol
+from typing import Any, Protocol
 from uuid import UUID
 
 from app.domain.models import Job
@@ -34,6 +34,14 @@ class DocumentProgress:
     job_status: JobStatus
     excluded: bool
     stored: bool
+    filename: str
+    page_count: int | None
+
+
+@dataclass(frozen=True)
+class Classification:
+    label: str
+    score: float
 
 
 class JobRepository(Protocol):
@@ -71,7 +79,23 @@ class JobRepository(Protocol):
         target: DocumentStatus,
     ) -> bool: ...
 
-    async def consolidate(self, job_id: UUID) -> bool: ...
+    async def save_flag(self, document_id: UUID, flagged: bool) -> None: ...
+
+    async def save_summary(self, document_id: UUID, summary: Mapping[str, Any]) -> None: ...
+
+    async def consolidate(
+        self,
+        job_id: UUID,
+        report: Mapping[str, Any] | None = None,
+    ) -> bool: ...
+
+
+class LLMProvider(Protocol):
+    async def complete(self, prompt: str) -> str: ...
+
+
+class Classifier(Protocol):
+    async def classify(self, text: str) -> Classification: ...
 
 
 class FileStorage(Protocol):

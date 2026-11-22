@@ -1,4 +1,5 @@
 import asyncio
+from uuid import UUID
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
@@ -69,7 +70,7 @@ async def _resumes(database_url: str) -> None:
     repository = PostgresJobRepository(create_session_factory(engine), build_queue(database_url))
     seen: list[DocumentStatus] = []
 
-    async def perform(status: DocumentStatus) -> None:
+    async def perform(_document_id: UUID, status: DocumentStatus) -> None:
         seen.append(status)
 
     try:
@@ -78,7 +79,7 @@ async def _resumes(database_url: str) -> None:
         document_id = job.documents[0].id
         async with engine.begin() as connection:
             await connection.execute(
-                text("UPDATE documents SET status = 'checking' WHERE id = :id"),
+                text("UPDATE documents SET status = 'summarising' WHERE id = :id"),
                 {"id": document_id},
             )
         await run_document(repository, document_id, perform=perform)

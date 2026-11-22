@@ -49,7 +49,7 @@ def test_queued_job_shows_pending_documents(migrated_database_url: str) -> None:
     body = response.json()
     assert body["id"] == job_id
     assert body["status"] == "queued"
-    assert body["progress"] == {"completed_steps": 0, "total_steps": 1}
+    assert body["progress"] == {"completed_steps": 0, "total_steps": 3}
     assert body["documents"] == [
         {
             "id": body["documents"][0]["id"],
@@ -91,7 +91,7 @@ def test_mixed_job_lists_the_rejected_file(migrated_database_url: str) -> None:
         }
     ]
     assert body["excluded_files"] == []
-    assert body["progress"] == {"completed_steps": 0, "total_steps": 1}
+    assert body["progress"] == {"completed_steps": 0, "total_steps": 3}
     asyncio.run(_clear(migrated_database_url))
 
 

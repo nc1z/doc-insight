@@ -242,10 +242,12 @@ Creating or confirming a job enqueues one task per stored document in the same t
 
 ### 3C. Pipeline Skeleton
 
-- [ ] Add `app/pipeline/` with step functions that have typed inputs and outputs: extract, check, summarise, consolidate.
-- [ ] Add `LLMProvider` and `Classifier` protocols in `app/domain/ports.py`, and mock adapters in `app/adapters/` with deterministic outputs. Register them on the factory.
-- [ ] Wire each step to the mock adapters, with configurable delays so mock mode shows realistic progress.
-- [ ] Update job and document statuses and progress counts as steps complete.
+- [x] Add `app/pipeline/` with step functions that have typed inputs and outputs: extract, check, summarise, consolidate.
+- [x] Add `LLMProvider` and `Classifier` protocols in `app/domain/ports.py`, and mock adapters in `app/adapters/` with deterministic outputs. Register them on the factory.
+- [x] Wire each step to the mock adapters, with configurable delays so mock mode shows realistic progress.
+- [x] Update job and document statuses and progress counts as steps complete.
+
+Extract, check, summarise, and consolidate are typed step functions. The factory selects the mock LLM and classifier, which return the same output for the same input. `MOCK_STEP_DELAY_SECONDS` defaults to 1 second and pauses the current step, so a poll can see `extracting`, `checking`, and `summarising`. The status is stored before that step runs, and a retry repeats it. A finished document stores its summary. Consolidation stores the report and marks the job `succeeded`. Progress counts those three finished steps per stored document.
 
 ### 3D. Processing Failures
 
