@@ -35,6 +35,13 @@ _MESSAGES = {
 }
 
 
+def message_for(code: str) -> str:
+    try:
+        return _MESSAGES[FileErrorCode(code)]
+    except ValueError:
+        return code
+
+
 @dataclass(frozen=True)
 class IncomingFile:
     filename: str

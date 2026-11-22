@@ -4,6 +4,7 @@ from uuid import UUID
 import psycopg
 from procrastinate import App
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.orm import selectinload
 
 from app.adapters.queue import PROCESS_JOB
 from app.domain.models import Document, Job
@@ -49,6 +50,14 @@ class PostgresJobRepository:
             session.add(job)
             await session.flush()
         return job
+
+    async def get(self, job_id: UUID) -> Job | None:
+        async with self._sessions() as session:
+            return await session.get(
+                Job,
+                job_id,
+                options=[selectinload(Job.documents)],
+            )
 
     async def _enqueue(self, connection: psycopg.AsyncConnection, job_id: UUID) -> None:
         task = self._queue.tasks[PROCESS_JOB]

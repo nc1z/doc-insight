@@ -2,25 +2,53 @@ import hashlib
 from collections.abc import Sequence
 from pathlib import PurePath
 from typing import Annotated
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, File, UploadFile
 from fastapi.responses import JSONResponse
 
 from app.adapters.factory import get_file_storage, get_job_repository
 from app.core.config import Settings, get_settings
-from app.core.errors import DomainError
+from app.core.errors import DomainError, ErrorBody
+from app.domain.models import Document, Job
 from app.domain.ports import FileStorage, JobRepository, NewDocument, NewRejection
+from app.domain.status import DocumentStatus
 from app.domain.validation import (
     AcceptedFile,
     FileRejection,
     IncomingFile,
     default_strategies,
+    message_for,
     validate_files,
 )
-from app.schemas.jobs import AcceptedDocument, AwaitingJob, QueuedJob, RejectedDocument
+from app.schemas.jobs import (
+    AcceptedDocument,
+    AwaitingJob,
+    JobDocument,
+    JobFile,
+    JobProgress,
+    JobView,
+    QueuedJob,
+    RejectedDocument,
+)
 
 router = APIRouter()
+_FINISHED = {DocumentStatus.SUCCEEDED, DocumentStatus.FAILED}
+
+
+@router.get(
+    "/jobs/{id}",
+    response_model=JobView,
+    responses={404: {"model": ErrorBody}},
+)
+async def read_job(
+    id: UUID,
+    jobs: Annotated[JobRepository, Depends(get_job_repository)],
+) -> JobView:
+    job = await jobs.get(id)
+    if job is None:
+        raise DomainError(404, "not_found", "The job was not found.")
+    return _job_view(job)
 
 
 @router.post("/jobs")
@@ -98,6 +126,60 @@ async def _store_accepted(
             )
         )
     return documents
+
+
+def _job_view(job: Job) -> JobView:
+    ordered = sorted(job.documents, key=lambda document: (document.created_at, document.filename))
+    rejected: list[JobFile] = []
+    excluded: list[JobFile] = []
+    documents: list[JobDocument] = []
+    completed = 0
+    for document in ordered:
+        if document.excluded:
+            excluded.append(_job_file(document))
+        elif document.storage_key is None:
+            rejected.append(_job_file(document))
+        else:
+            documents.append(_job_document(document))
+            if document.status in _FINISHED:
+                completed += 1
+    return JobView(
+        id=job.id,
+        status=job.status.value,
+        progress=JobProgress(completed_steps=completed, total_steps=len(documents)),
+        documents=documents,
+        rejected_files=rejected,
+        excluded_files=excluded,
+        report=None,
+        error=None,
+    )
+
+
+def _job_document(document: Document) -> JobDocument:
+    error = None
+    if document.status is DocumentStatus.FAILED and document.rejection_reason is not None:
+        error = ErrorBody(
+            code=document.rejection_reason,
+            message=message_for(document.rejection_reason),
+        )
+    return JobDocument(
+        id=document.id,
+        filename=document.filename,
+        status=document.status.value,
+        flagged=document.flagged,
+        error=error,
+        summary=None,
+    )
+
+
+def _job_file(document: Document) -> JobFile:
+    code = document.rejection_reason or "rejected"
+    return JobFile(
+        id=document.id,
+        filename=document.filename,
+        code=code,
+        message=message_for(code),
+    )
 
 
 def _rejected_body(item: FileRejection) -> dict[str, str]:

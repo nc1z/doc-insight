@@ -1,6 +1,7 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol
+from uuid import UUID
 
 from app.domain.models import Job
 
@@ -27,6 +28,8 @@ class JobRepository(Protocol):
         documents: Sequence[NewDocument],
         rejected: Sequence[NewRejection],
     ) -> Job: ...
+
+    async def get(self, job_id: UUID) -> Job | None: ...
 
 
 class FileStorage(Protocol):

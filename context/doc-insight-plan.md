@@ -174,9 +174,11 @@ Solves flow step 2: a client (Bruno) reads any job's state and resolves rejected
 
 ### 2A. GET /jobs/{id}
 
-- [ ] Add the `GET /jobs/{id}` response schema in `app/schemas/`, exactly as in the architecture status flow: status, progress, documents (status, flagged, error, summary), rejected and excluded files, report, error.
-- [ ] Return `404` with the error schema for an unknown ID.
-- [ ] Check the generated OpenAPI schema at `/docs` matches the response.
+- [x] Add the `GET /jobs/{id}` response schema in `app/schemas/`, exactly as in the architecture status flow: status, progress, documents (status, flagged, error, summary), rejected and excluded files, report, error.
+- [x] Return `404` with the error schema for an unknown ID.
+- [x] Check the generated OpenAPI schema at `/docs` matches the response.
+
+`GET /jobs/{id}` returns `JobView`. Stored files are `documents`. Files that were never stored are `rejected_files`, and files the analyst dropped are `excluded_files`. `summary`, `report`, and the job `error` are null until later phases fill them. Progress counts finished documents against the documents still in the job. An unknown id returns `404` with code `not_found`.
 
 ### 2B. Job State Machine
 
