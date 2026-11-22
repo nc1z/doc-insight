@@ -227,8 +227,10 @@ Solves flow step 3: the worker claims the job and moves it through every state.
 
 ### 3A. Queue Model Decision
 
-- [ ] Decide between one task per job and one task per document plus a consolidation task triggered when the last document finishes.
-- [ ] Update the architecture to remove the contradiction between "only the job ID goes on the queue" and "each document is its own queue task", and record the decision.
+- [x] Decide between one task per job and one task per document plus a consolidation task triggered when the last document finishes.
+- [x] Update the architecture to remove the contradiction between "only the job ID goes on the queue" and "each document is its own queue task", and record the decision.
+
+Creating or confirming a job enqueues one task per stored document in the same transaction. The payload is the document id. The document task that locks the job and finds every stored document `succeeded` or `failed` moves the job to `consolidating` and inserts the consolidation task, whose payload is the job id, on that same connection. The queue never carries file bytes.
 
 ### 3B. Worker Process
 

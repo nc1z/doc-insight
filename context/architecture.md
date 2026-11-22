@@ -45,7 +45,7 @@ flowchart LR
         API -- "job + outbox row,<br/>one transaction" --> DB[(RDS Postgres<br/>jobs, results, outbox)]
         API --> Files[(S3<br/>uploads)]
         Relay[Outbox relay] -- "read unsent rows" --> DB
-        Relay -- "publish job ID" --> SQS[[SQS<br/>with dead-letter queue]]
+        Relay -- "publish document id<br/>or consolidation job id" --> SQS[[SQS<br/>with dead-letter queue]]
         SQS --> Worker[Worker<br/>ECS Fargate, scales on queue depth]
         Worker --> DB
         Worker --> Files
@@ -79,7 +79,7 @@ sequenceDiagram
         API->>Files: Store file
         Files-->>API: Storage key
     end
-    API->>Jobs: Create job (queued) and enqueue it, in one transaction
+    API->>Jobs: Create job (queued) and enqueue<br/>one task per document, in one transaction
     Jobs-->>API: Job ID
     API-->>UI: 202 Accepted (job ID, status queued)
     UI-->>Analyst: Show per-document progress
@@ -165,7 +165,7 @@ sequenceDiagram
 
     Analyst->>UI: Continue
     UI->>API: POST /jobs/{id}/confirm
-    API->>Jobs: Set status queued, record excluded files,<br/>and enqueue it, in one transaction
+    API->>Jobs: Set status queued, record excluded files,<br/>and enqueue one task per stored document, in one transaction
     API-->>UI: 202 Accepted
     UI-->>Analyst: Show per-document progress
 ```
@@ -201,7 +201,7 @@ stateDiagram-v2
     awaiting_input --> queued: continue
     awaiting_input --> cancelled: cancel
     awaiting_input --> expired: no decision before timeout
-    queued --> [*]: worker picks up
+    queued --> [*]: document tasks start
     cancelled --> [*]
     expired --> [*]
 ```
@@ -210,9 +210,10 @@ stateDiagram-v2
 
 - **The API coordinates every step.** Each adapter does one thing and never calls another adapter.
 - **State changes use action endpoints**: `POST /jobs/{id}/confirm` and `POST /jobs/{id}/cancel`. Confirm means the analyst accepts the final set of files and processing can start. Each action is explicit, and the server rejects actions that are invalid for the job's current state with `409 Conflict`. Cancel is a `POST`, not a `DELETE`, because the job record stays with status `cancelled`.
-- **Postgres is the job store and the queue.** Procrastinate inserts the queue row on the same connection as the job row, so the two commit together and a crash cannot leave a queued job with no message. This removes the need for an outbox or sweeper. Workers claim ready jobs with `SELECT … FOR UPDATE SKIP LOCKED` and must still be idempotent, because a job can be retried after a worker crash.
-- **One operation for create and enqueue.** Because the two writes are atomic, the adapter interface exposes them as a single operation. The Postgres adapter does it in one transaction; another queue provider would need an outbox behind the same interface.
-- **Only the job ID goes on the queue.** The worker loads the job from the job store and reads files from file storage by their storage keys.
+- **Postgres is the job store and the queue.** Procrastinate inserts each queue row on the same connection as the job row, so they commit together and a crash cannot leave a queued job with no document task. This removes the need for an outbox or sweeper. Workers claim ready tasks with `SELECT … FOR UPDATE SKIP LOCKED` and must still be idempotent, because a task can be retried after a worker crash.
+- **One operation for create and enqueue.** Creating a queued job and inserting one queue row per stored document is a single operation. The Postgres adapter does it in one transaction; another queue provider would need an outbox behind the same interface.
+- **The queue carries ids, not file bytes.** A document task carries the document id. The consolidation task carries the job id. The worker loads the job and reads the file from storage by its storage key.
+- **The last finished document starts consolidation.** That task locks the job, marks itself finished, and counts stored documents that are not `succeeded` or `failed`. A count of zero moves the job to `consolidating` and inserts the consolidation task on the same connection. A second finisher finds the job already past `running`, so it does not start another report.
 - **Orphaned files are cleaned up, not prevented.** If storing a file succeeds but creating the job fails, the file is left without a job. A retention rule or cleanup job deletes it, in line with the retention assumption in the PRD.
 - **Uploads go to MinIO.** The file storage adapter speaks the S3 API and points at a MinIO service in Docker Compose. No cloud account is required. Moving to AWS S3 later changes the endpoint, bucket, and keys.
 
@@ -286,8 +287,8 @@ stateDiagram-v2
     awaiting_input --> queued: confirm
     awaiting_input --> cancelled: cancel
     awaiting_input --> expired: timeout
-    queued --> running: worker claims job
-    running --> consolidating: all documents finished
+    queued --> running: first document starts
+    running --> consolidating: last document finishes
     consolidating --> succeeded
     running --> failed: unrecoverable error
     consolidating --> failed: unrecoverable error
@@ -317,15 +318,17 @@ What the worker does with a queued job, from extracted text to a stored consolid
 
 ```mermaid
 flowchart TD
-    subgraph PerDoc[Per document, in parallel]
+    Enqueue[Create or confirm<br/>one queue task per stored document] --> Extract
+
+    subgraph PerDoc[Document task, one per file, in parallel]
         Extract[Extract<br/>text per page, images, OCR fallback] --> Checks[Programmatic guardrails<br/>injection patterns, hidden text,<br/>invisible characters]
         Checks --> Classifier[Decision-model guardrail<br/>injection classifier]
         Classifier --> Summarise[Document summary<br/>chunk, summarise, combine]
         Summarise --> ValidateDoc[Output validation<br/>schema, citations]
     end
 
-    ValidateDoc --> FanIn{All documents<br/>finished?}
-    FanIn -- yes --> Consolidate[Consolidated summary<br/>from document summaries]
+    ValidateDoc --> FanIn{Job locked: every stored<br/>document succeeded or failed?}
+    FanIn -- yes --> Consolidate[Consolidation task<br/>payload is the job id]
     Consolidate --> ValidateReport[Output validation<br/>schema, citations]
 
     Extract -. store .-> DB[(Postgres)]
@@ -353,14 +356,14 @@ Document text is untrusted data. Guardrails run in layers, cheapest first.
 
 ### Document summary
 
-- Each document is summarised separately, in parallel, as its own queue task.
+- Each document is summarised separately, in parallel, as its own queue task. The payload is the document id.
 - Long documents are split into chunks. Each chunk is summarised, then the chunk summaries are combined into the document's key details (map-reduce), within a configurable token budget.
 - The combine step receives relevant source excerpts alongside the chunk summaries, which improves faithfulness and reduces hallucination.
 - The output follows the per-document schema: title, inferred type, short summary, main topics, key entities, and notable points, each with a page number and a supporting quote.
 
 ### Consolidated summary
 
-- Runs once every document in the job has finished (fan-in).
+- Runs once, as its own queue task, when the last stored document finishes. That document task locks the job and counts stored documents that are not `succeeded` or `failed`. Zero means this task inserts the consolidation task, whose payload is the job id, in the same transaction.
 - Its input is the validated document summaries, not the raw text. This keeps the prompt small and limits how far injected content can travel.
 - The output follows the report schema: overall summary, common themes, contradictions, combined entities, takeaways, flagged documents, and excluded files.
 - **Contradictions are surfaced, not merged.** LLMs tend to collapse conflicting facts into one consensus value. The prompt asks for disagreements explicitly, and each contradiction lists both claims, each with its document and page.
