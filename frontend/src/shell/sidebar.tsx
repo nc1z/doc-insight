@@ -48,7 +48,7 @@ function StatusDot({ status }: { status?: string }) {
         : status === 'awaiting_input'
           ? 'bg-warning'
           : 'bg-info animate-pulse';
-  return <span aria-hidden className={cn('ml-auto size-1.5 shrink-0 rounded-full', tone)} />;
+  return <span aria-hidden className={cn('mt-[7px] size-1.5 shrink-0 rounded-full', tone)} />;
 }
 
 export function Sidebar({
@@ -139,14 +139,17 @@ export function Sidebar({
                     type="button"
                     aria-current={item.id === activeId ? 'page' : undefined}
                     className={cn(
-                      'group flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm text-sidebar-foreground/80 transition-colors outline-none hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-ring/30',
+                      'group flex w-full cursor-pointer items-start gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm leading-5 text-sidebar-foreground/80 transition-colors outline-none hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-ring/30',
                       item.id === activeId &&
                         'bg-sidebar-accent font-medium text-sidebar-accent-foreground',
                     )}
                     onClick={() => onOpen(item.id)}
                   >
-                    <FileText aria-hidden className="size-4 shrink-0 text-muted-foreground" />
-                    <span className="min-w-0 truncate">{item.label}</span>
+                    <FileText
+                      aria-hidden
+                      className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+                    />
+                    <span className="min-w-0 flex-1 line-clamp-2 break-words">{item.label}</span>
                     <StatusDot status={item.status} />
                   </button>
                 </li>

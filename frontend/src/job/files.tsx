@@ -14,6 +14,7 @@ import {
 import type { JobView } from '@/api/client';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { readSummary } from '@/report/read';
 import { cn } from 'cn';
 
 const STATUS_LABEL: Record<string, string> = {
@@ -82,63 +83,77 @@ export function FileList({
   job,
   onRetry,
   retrying,
+  showProgress = true,
+  showSummaries = false,
 }: {
   job: JobView;
   onRetry?: () => void;
   retrying?: boolean;
+  showProgress?: boolean;
+  showSummaries?: boolean;
 }) {
   const percent = progressPercent(job);
   return (
     <div className="w-full text-left">
-      <div className="mb-5 flex items-center gap-4">
-        <Progress value={percent} aria-label="Progress" />
-        <span className="w-10 shrink-0 text-right text-sm tabular-nums text-muted-foreground">
-          {percent}%
-        </span>
-      </div>
+      {showProgress && (
+        <div className="mb-5 flex items-center gap-4">
+          <Progress value={percent} aria-label="Progress" />
+          <span className="w-10 shrink-0 text-right text-sm tabular-nums text-muted-foreground">
+            {percent}%
+          </span>
+        </div>
+      )}
       <ul
         className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card shadow-card"
         aria-label="Files"
       >
-        {job.documents.map((document) => (
-          <li key={document.id} className="px-4 py-3.5">
-            <div className="flex items-center gap-3.5">
-              <span
-                aria-hidden
-                className="grid size-9 shrink-0 place-items-center rounded-lg bg-secondary text-muted-foreground"
-              >
-                <FileText className="size-4" />
-              </span>
-              <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                {document.filename}
-              </span>
-              <StatusBadge status={document.status} />
-              {document.status === 'failed' && onRetry && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon-sm"
-                  aria-label={`Retry ${document.filename}`}
-                  disabled={retrying}
-                  onClick={onRetry}
+        {job.documents.map((document) => {
+          const preview = showSummaries ? readSummary(document.summary)?.summary : undefined;
+          return (
+            <li key={document.id} className="px-4 py-3.5">
+              <div className="flex items-center gap-3.5">
+                <span
+                  aria-hidden
+                  className="grid size-9 shrink-0 place-items-center rounded-lg bg-secondary text-muted-foreground"
                 >
-                  <RotateCcw />
-                </Button>
+                  <FileText className="size-4" />
+                </span>
+                <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                  {document.filename}
+                </span>
+                <StatusBadge status={document.status} />
+                {document.status === 'failed' && onRetry && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon-sm"
+                    aria-label={`Retry ${document.filename}`}
+                    disabled={retrying}
+                    onClick={onRetry}
+                  >
+                    <RotateCcw />
+                  </Button>
+                )}
+              </div>
+              {document.error && (
+                <p className="mt-2 pl-[3.125rem] text-[0.8125rem] leading-5 text-muted-foreground">
+                  {document.error.message}
+                </p>
               )}
-            </div>
-            {document.error && (
-              <p className="mt-2 pl-[3.125rem] text-[0.8125rem] leading-5 text-muted-foreground">
-                {document.error.message}
-              </p>
-            )}
-            {document.flagged && (
-              <p className="mt-2 flex items-center gap-1.5 pl-[3.125rem] text-[0.8125rem] leading-5 text-warning">
-                <TriangleAlert className="size-3.5 shrink-0" aria-hidden />
-                {document.flag_reasons.map((reason) => FLAG_LABEL[reason] ?? reason).join(', ')}
-              </p>
-            )}
-          </li>
-        ))}
+              {preview && (
+                <p className="mt-2 line-clamp-2 animate-in pl-[3.125rem] text-[0.8125rem] leading-5 text-muted-foreground duration-500 fade-in-0 slide-in-from-bottom-1">
+                  {preview}
+                </p>
+              )}
+              {document.flagged && (
+                <p className="mt-2 flex items-center gap-1.5 pl-[3.125rem] text-[0.8125rem] leading-5 text-warning">
+                  <TriangleAlert className="size-3.5 shrink-0" aria-hidden />
+                  {document.flag_reasons.map((reason) => FLAG_LABEL[reason] ?? reason).join(', ')}
+                </p>
+              )}
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

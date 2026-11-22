@@ -28,10 +28,12 @@ import {
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { FileList } from '@/job/files';
+import { Working } from '@/job/working';
 import { jobKey, jobLabel } from '@/job/label';
 import { pollInterval } from '@/job/poll';
 import { ReportView } from '@/report/view';
 import { BrandMark, Sidebar } from '@/shell/sidebar';
+import { pushRoute, readRouteId } from '@/shell/route';
 import { readJobIds, readSidebarOpen, writeJobIds, writeSidebarOpen } from '@/shell/storage';
 import { DropZone } from '@/upload/drop-zone';
 import { checkFiles, type FileNotice } from '@/upload/files';
@@ -71,8 +73,12 @@ export function HomePage() {
   const queryClient = useQueryClient();
   const reuploadRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(() => readSidebarOpen() && !isMobile());
-  const [ids, setIds] = useState(readJobIds);
-  const [activeId, setActiveId] = useState<string | null>(null);
+  const [ids, setIds] = useState(() => {
+    const stored = readJobIds();
+    const fromUrl = readRouteId();
+    return fromUrl && !stored.includes(fromUrl) ? [fromUrl, ...stored] : stored;
+  });
+  const [activeId, setActiveId] = useState<string | null>(readRouteId);
   const [notices, setNotices] = useState<FileNotice[]>([]);
   const [missing, setMissing] = useState(false);
   const [held, setHeld] = useState<JobView | null>(null);
@@ -120,6 +126,26 @@ export function HomePage() {
     });
   }, [activeId, history, ids]);
 
+  useEffect(() => {
+    function onPop() {
+      const id = readRouteId();
+      setActiveId(id);
+      setMissing(false);
+      setHeld(null);
+      setNotices([]);
+      if (id) {
+        setIds((current) => (current.includes(id) ? current : [id, ...current]));
+      }
+    }
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
+  function go(id: string | null) {
+    setActiveId(id);
+    pushRoute(id);
+  }
+
   function toggleSidebar() {
     setOpen((current) => {
       writeSidebarOpen(!current);
@@ -144,14 +170,14 @@ export function HomePage() {
   function showJob(next: JobView) {
     queryClient.setQueryData(jobKey(next.id), next);
     remember(next.id);
-    setActiveId(next.id);
+    go(next.id);
     setMissing(false);
     setHeld(null);
     setNotices([]);
   }
 
   function newTask() {
-    setActiveId(null);
+    go(null);
     setMissing(false);
     setHeld(null);
     setNotices([]);
@@ -231,7 +257,7 @@ export function HomePage() {
     try {
       const cancelled = await cancelJob(activeId);
       queryClient.setQueryData(jobKey(cancelled.id), cancelled);
-      setActiveId(null);
+      go(null);
       setNotices([{ filename: '', message: 'Cancelled.' }]);
     } catch (error) {
       setNotices([noticeFrom(error)]);
@@ -250,7 +276,8 @@ export function HomePage() {
   const shown = job ?? (held && held.id === activeId ? held : undefined);
   const stage = stageFor(activeId, shown, missing, busy);
   const landing = stage === 'ready';
-  const heading = headingFor(stage, shown);
+  const reopening = stage === 'starting' && activeId !== null;
+  const heading = headingFor(stage, shown, reopening);
 
   return (
     <div className="flex h-svh overflow-hidden bg-background">
@@ -268,7 +295,7 @@ export function HomePage() {
           setMissing(false);
           setHeld(null);
           setNotices([]);
-          setActiveId(id);
+          go(id);
           closeOnMobile();
         }}
       />
@@ -338,12 +365,14 @@ export function HomePage() {
               {stage === 'starting' && (
                 <div className="mt-8 flex items-center gap-3 rounded-2xl border border-border bg-card p-5 text-sm text-muted-foreground shadow-card">
                   <LoaderCircle className="size-4 animate-spin" aria-hidden />
-                  Uploading your files and getting started…
+                  {reopening
+                    ? 'Fetching the latest status…'
+                    : 'Uploading your files and getting started…'}
                 </div>
               )}
               {stage === 'working' && shown && (
                 <div className="mt-8">
-                  <FileList job={shown} />
+                  <Working job={shown} />
                 </div>
               )}
               {stage === 'decision' && shown && (
@@ -411,11 +440,23 @@ function stageFor(
   return 'working';
 }
 
-function headingFor(stage: Stage, job: JobView | undefined): { title: string; subtitle: string } {
+function headingFor(
+  stage: Stage,
+  job: JobView | undefined,
+  reopening: boolean,
+): { title: string; subtitle: string } {
   switch (stage) {
     case 'starting':
-      return { title: 'Uploading', subtitle: 'This only takes a moment.' };
+      return reopening
+        ? { title: 'Loading your analysis', subtitle: 'This only takes a moment.' }
+        : { title: 'Uploading', subtitle: 'This only takes a moment.' };
     case 'working':
+      if (job?.status === 'consolidating') {
+        return {
+          title: 'Writing your report',
+          subtitle: 'Every document is summarised. Pulling it all together now.',
+        };
+      }
       return {
         title: 'Analysing your documents',
         subtitle: 'Reading each file and writing your report. This page updates on its own.',

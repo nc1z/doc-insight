@@ -37,11 +37,13 @@ const queuedJob = {
 describe('home page', () => {
   beforeEach(() => {
     localStorage.clear();
+    window.history.replaceState(null, '', '/');
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
     localStorage.clear();
+    window.history.replaceState(null, '', '/');
   });
 
   it('keeps an unsupported file on the page', async () => {
@@ -82,6 +84,38 @@ describe('home page', () => {
       expect.objectContaining({ method: 'POST' }),
     );
     expect(JSON.parse(localStorage.getItem('doc-insight.jobs') ?? '[]')).toEqual(['job-1']);
+    expect(window.location.pathname).toBe('/jobs/job-1');
+  });
+
+  it('shows the running job again when the page is reloaded on its URL', async () => {
+    window.history.replaceState(null, '', '/jobs/job-1');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(Response.json(queuedJob))),
+    );
+    renderHome();
+
+    expect(await screen.findByText('Analysing your documents')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Upload documents')).not.toBeInTheDocument();
+  });
+
+  it('shows the report step while the final summary is being written', async () => {
+    window.history.replaceState(null, '', '/jobs/job-1');
+    const consolidating = {
+      ...queuedJob,
+      status: 'consolidating',
+      progress: { completed_steps: 3, total_steps: 3 },
+      documents: [{ ...queuedJob.documents[0], status: 'succeeded' }],
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(Response.json(consolidating))),
+    );
+    renderHome();
+
+    expect(await screen.findByText('Writing your report')).toBeInTheDocument();
+    expect(screen.getByText('Writing your consolidated report')).toBeInTheDocument();
+    expect(screen.getByText('75%')).toBeInTheDocument();
   });
 
   it('remembers when the sidebar is closed', () => {

@@ -123,7 +123,7 @@ export function ReportView({ job }: { job: JobView }) {
           </TabsTrigger>
         ))}
       </TabsList>
-      <TabsContent value="overview" className="space-y-9 pt-8">
+      <TabsContent value="overview" className="reveal space-y-9 pt-8">
         <Prose>{report?.summary ?? 'The report is not ready.'}</Prose>
         {report && report.themes.length > 0 && (
           <Section title="Themes">
@@ -193,7 +193,7 @@ export function ReportView({ job }: { job: JobView }) {
       {job.documents.map((document) => {
         const summary = readSummary(document.summary);
         return (
-          <TabsContent key={document.id} value={document.id} className="space-y-9 pt-8">
+          <TabsContent key={document.id} value={document.id} className="reveal space-y-9 pt-8">
             {summary ? (
               <>
                 <header>

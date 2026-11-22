@@ -186,6 +186,69 @@
   }
 }
 
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@layer utilities {
+  .shimmer {
+    background-image: linear-gradient(
+      90deg,
+      var(--muted) 0%,
+      oklch(0.985 0.003 260) 45%,
+      var(--muted) 90%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 2.2s linear infinite;
+  }
+  /* Indeterminate sheen on a progress bar that is waiting on one last step. */
+  .shimmer-bar [data-slot='progress-indicator'] {
+    background-image: linear-gradient(
+      90deg,
+      var(--primary) 0%,
+      oklch(0.5 0.03 262) 50%,
+      var(--primary) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.8s linear infinite;
+  }
+  /* Children rise in one after another when a screen first appears. */
+  .reveal > * {
+    animation: reveal 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .reveal > *:nth-child(2) {
+    animation-delay: 90ms;
+  }
+  .reveal > *:nth-child(3) {
+    animation-delay: 180ms;
+  }
+  .reveal > *:nth-child(4) {
+    animation-delay: 270ms;
+  }
+  .reveal > *:nth-child(5) {
+    animation-delay: 360ms;
+  }
+  .reveal > *:nth-child(n + 6) {
+    animation-delay: 450ms;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     animation-duration: 0.01ms !important;
