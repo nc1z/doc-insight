@@ -131,10 +131,12 @@ Procrastinate is the queue, recorded on `2026-11-22`. `PostgresJobRepository.cre
 
 ### 1E. POST /jobs
 
-- [ ] Add `app/api/` with the jobs router and `app/schemas/` with the upload response models.
-- [ ] All files valid: store each file, create and enqueue the job, return `202` with the job ID and status `queued`.
-- [ ] Some files rejected: store valid files, create the job as `awaiting_input` without enqueuing, return `201` with accepted and rejected files.
-- [ ] No valid files: store nothing, return `422` with the per-file error list.
+- [x] Add `app/api/` with the jobs router and `app/schemas/` with the upload response models.
+- [x] All files valid: store each file, create and enqueue the job, return `202` with the job ID and status `queued`.
+- [x] Some files rejected: store valid files, create the job as `awaiting_input` without enqueuing, return `201` with accepted and rejected files.
+- [x] No valid files: store nothing, return `422` with the per-file error list.
+
+`POST /jobs` validates with the strategy list, then stores only accepted files. Every file valid returns `202` and `create_and_enqueue`. A mix returns `201` and `create_awaiting_input`, which records rejected files on the job and does not defer `process_job`. When every file is rejected, or the file count is over the limit, nothing is stored and the error body uses the existing `code` / `message` / `details` shape. Per-file reasons are in `details.rejected`.
 
 ### 1F. Sample Fixtures
 

@@ -13,8 +13,20 @@ class NewDocument:
     page_count: int | None = None
 
 
+@dataclass(frozen=True)
+class NewRejection:
+    filename: str
+    code: str
+
+
 class JobRepository(Protocol):
     async def create_and_enqueue(self, documents: Sequence[NewDocument]) -> Job: ...
+
+    async def create_awaiting_input(
+        self,
+        documents: Sequence[NewDocument],
+        rejected: Sequence[NewRejection],
+    ) -> Job: ...
 
 
 class FileStorage(Protocol):
