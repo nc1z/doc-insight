@@ -528,11 +528,13 @@ The `PageReader` port reads a page image and returns text. `GatewayPageReader` s
 
 ### 10C. Tests and Manual Verification
 
-- [ ] Test with the scanned and image-heavy samples.
+- [x] Test with the scanned and image-heavy samples.
 
 ### 10D. Learning Checkpoint
 
-- [ ] Learning: explain the code changes in small chunks with file names, short snippets, layman explanations, and the cost and accuracy trade-offs of the chosen approach.
+- [x] Learning: explain the code changes in small chunks with file names, short snippets, layman explanations, and the cost and accuracy trade-offs of the chosen approach.
+
+Extraction marks a page `needs_image` when a picture is drawn on it (`backend/app/pipeline/extract.py`). `read_image_pages` (`backend/app/pipeline/vision.py`) renders those pages to PNG and asks a `PageReader` what the picture says. `GatewayPageReader` (`backend/app/adapters/vision_client.py`) sends the image to `VISION_MODEL` on Cloudflare. The words come back as page text, so chunking, the safety check, and the summary treat them like any other words. A chart or a scan with no text layer would otherwise be invisible to the summary. Calling a vision model costs one request per picture page and can misread a figure, which is why a page is read only when pictures cover `VISION_MIN_IMAGE_FRACTION` of it, and at most `VISION_MAX_PAGES` pages per file. `VISION_PROVIDER=off` skips the step. Tests cover a scan with no text layer, a chart whose numbers are only in the image, and a file that stays empty when the reader is off (`backend/tests/test_vision.py`, `backend/tests/test_extraction.py`, `backend/tests/test_pipeline.py`).
 
 Suggested commit message: `feat(backend): handle images and scanned pages`
 
